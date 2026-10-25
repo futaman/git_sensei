@@ -18,6 +18,7 @@ import { tokenize } from './parser/tokenize.ts'
 export type { CommandResult } from './commands/context.ts'
 export type { GitEvent } from './events.ts'
 export type * from './model/types.ts'
+export * from './query.ts'
 
 const GIT_COMMANDS: Record<string, (cmd: Cmd, argv: string[]) => void> = {
   init,
