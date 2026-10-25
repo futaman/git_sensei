@@ -1,10 +1,11 @@
 // 突き合わせテストの土台：本物のgitの結果がどの環境でも同じになることを確かめる。
 import { afterEach, describe, expect, it } from 'vitest'
-import { RealGitRepo, type Step } from './realGit.ts'
+import type { Step } from './harness.ts'
+import { RealGitRepo } from './realGit.ts'
 
 const firstCommit: Step[] = [
   { git: ['init'] },
-  { write: { path: 'README.md', content: 'hello\n' } },
+  { write: ['README.md', 'hello\n'] },
   { git: ['add', 'README.md'] },
   { git: ['commit', '-m', 'first commit'] },
 ]

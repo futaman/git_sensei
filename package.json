@@ -18,6 +18,8 @@
     "test:golden": "vitest run tests/golden"
   },
   "dependencies": {
+    "@noble/hashes": "^2.4.0",
+    "immer": "^11.2.9",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },

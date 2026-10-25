@@ -138,3 +138,26 @@ execute(world, cmd) → { world', output, events[] }   ← 純粋関数
 - [ ] ターミナル出力を本物の英語にするか、日本語の解説も添えるか（案：出力は本物の英語、横に日本語の吹き出し）
 - [ ] ハッシュを本物のSHA-1にするか、見やすい疑似ハッシュにするか（案：本物。テストでも使える）
 - [ ] 段階的に機能を開放するか（序盤は使えるコマンドを制限する）
+
+## 5. 実装の状況
+
+### M1（2026-10-25）
+
+対応したコマンド：`init`、`add`（`-A`、`-u`、ディレクトリ、`*`/`?`）、`commit`（`-m`、`-a`、`--amend`、`--no-edit`、`--allow-empty`）、`status`（通常、`-s`、`--porcelain`、`-b`）、`log`（`--oneline`、`--all`、`-n`、`--decorate`、リビジョン指定）、`branch`（一覧、作成、`-d`/`-D`、`-m`、`--show-current`）、`switch`（`-c`、`-C`、`--detach`、`-`）、`checkout`（ブランチ、`-b`、コミット）、`merge`（fast-forward、`--ff-only`）
+
+- 突き合わせテスト（`tests/golden/m1.test.ts`）で、本物のgitと比べて次が一致することを確かめている
+  - コミットのハッシュ値
+  - refs、HEAD、index、作業ツリー
+  - `status --porcelain`
+  - 各コマンドの終了コード
+  - 主要コマンドの標準出力
+- 演出向けの意味イベント：`COMMIT_CREATED`、`DETACHED_HEAD_ENTERED`、`COMMITS_ORPHANED` など（`src/engine/events.ts`）
+
+M1の時点で、本物のgitと違う点や未対応のもの：
+
+- 名前の変更（rename）を検出しない。削除と追加として表示する
+- 日本語などASCII以外のファイル名を、本物のgitのようにエスケープして表示しない（`core.quotePath=false` 相当。学習者には読みやすい）
+- テキストファイルだけを扱う。実行権限（`100755`）、シンボリックリンク、バイナリには未対応
+- `.gitignore` は未対応（M5までに対応する）
+- `log --graph`、範囲指定（`a..b`）、fast-forward できないマージ、エディタでのメッセージ入力は、「このシミュレータではまだ使えません」と表示する
+- エラーメッセージ（標準エラー）の文言は、gitのバージョンで変わるため完全には合わせていない。終了コードは一致させている
