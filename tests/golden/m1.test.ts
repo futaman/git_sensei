@@ -427,3 +427,33 @@ describe('pathspec の [ ]', () => {
     ])
   })
 })
+
+describe('branch -M と log -n（検証レポートの B4・B7）', () => {
+  it('今いるブランチへの branch -M は断る', () => {
+    expectSameAsRealGit([
+      ...firstCommit,
+      { git: ['branch', 'x'] },
+      { write: ['README.md', '2\n'] },
+      { git: ['commit', '-am', 'two'] },
+      { git: ['branch', '-M', 'x', 'main'] },
+      { check: true },
+      { git: ['branch', '-m', 'x', 'main'] },
+      { git: ['branch', '-M', 'main', 'main'] },
+      { git: ['switch', 'x'] },
+      { git: ['branch', '-M', 'x', 'main'] },
+      { git: ['branch'], compare: out },
+      { git: ['status'], compare: out },
+    ])
+  })
+
+  it('log -n に負の数を渡すと無制限', () => {
+    expectSameAsRealGit([
+      ...firstCommit,
+      { write: ['README.md', '2\n'] },
+      { git: ['commit', '-am', 'two'] },
+      { git: ['log', '--oneline', '-n', '-1'], compare: out },
+      { git: ['log', '--oneline', '--max-count=-3'], compare: out },
+      { git: ['log', '--oneline', '-n', '0'], compare: out },
+    ])
+  })
+})

@@ -58,7 +58,9 @@ export function log(cmd: Cmd, argv: string[]): void {
 
   const maxCount = values.has('max-count') ? Number(values.get('max-count')?.[0]) : Infinity
   if (Number.isNaN(maxCount)) fail(cmd, "fatal: '-n' requires a number")
-  const commits = walk(git, starts).slice(0, maxCount)
+  // 負の数は「無制限」（本物の git と同じ）
+  const limit = maxCount < 0 ? Infinity : maxCount
+  const commits = walk(git, starts).slice(0, limit)
   const decorate = !argv.includes('--no-decorate') && (flags.has('decorate') || cmd.ctx.tty)
   const deco = decorate ? decorations(git) : new Map<Oid, string>()
 
