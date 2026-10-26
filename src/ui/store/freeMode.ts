@@ -22,8 +22,12 @@ import {
   TEAM_PATHS,
 } from '../../scenarios/sandbox/team.ts'
 import { safeStorage } from '../storage.ts'
+import { restoreSaved } from './restore.ts'
 
 export type Preset = 'solo' | 'team'
+
+/** localStorage に保存するときの名前 */
+export const STORAGE_KEY = 'git-sensei:free-mode'
 
 export const HOME = '/home/you'
 const PLAYER = { name: 'あなた', email: 'you@example.com' }
@@ -267,11 +271,13 @@ export const useFreeMode = create<FreeModeState>()(
       },
     }),
     {
-      name: 'git-sensei:free-mode',
+      name: STORAGE_KEY,
       // 3: マージ（コンフリクト）対応で world の形が変わった。古い保存データは捨てて最初から
       version: 3,
       migrate: () => ({}) as FreeModeState,
       storage: createJSONStorage(() => safeStorage),
+      // 壊れた保存データは捨てて、初期状態から始める（検証レポート B2）
+      merge: (saved, current) => ({ ...current, ...restoreSaved(saved) }),
       partialize: (s) => ({
         preset: s.preset,
         world: s.world,
