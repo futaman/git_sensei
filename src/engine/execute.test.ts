@@ -1,7 +1,14 @@
 // 本物のgitと比べられない、シミュレータ独自の約束ごと（失敗時の状態、意味イベント、未対応の扱い）。
 import { produce } from 'immer'
 import { describe, expect, it } from 'vitest'
-import { createWorld, type ExecContext, execute, type World, writeFile } from './index.ts'
+import {
+  addWorkspace,
+  createWorld,
+  type ExecContext,
+  execute,
+  type World,
+  writeFile,
+} from './index.ts'
 
 const ctx: ExecContext = {
   workspace: 'me',
@@ -150,5 +157,53 @@ describe('利用者の入力で throw しない', () => {
       const r = execute(base, line, ctx)
       expect(r.stderr, line).not.toContain('内部エラー')
     }
+  })
+})
+
+describe('Object.prototype と同じ名前（シェルとリモート）', () => {
+  const at = (workspace: string): ExecContext => ({ ...ctx, workspace, home: '/home/me' })
+  function runIn(world: World, workspace: string, ...lines: string[]): World {
+    let w = world
+    for (const line of lines) {
+      const r = execute(w, line, at(workspace))
+      expect(r.exitCode, `${line}\n${r.stderr}`).toBe(0)
+      w = r.world
+    }
+    return w
+  }
+
+  it.each(['toString', 'constructor', '__proto__', 'valueOf', 'hasOwnProperty'])('%s', (name) => {
+    let w = createWorld(
+      { '/home/me': { path: '/home/me' }, '/home/me/app': { path: '/home/me/app' } },
+      { 'user.name': 'Me', 'user.email': 'me@example.com' },
+    )
+    w = addWorkspace(w, '/srv/origin.git')
+    w = runIn(w, '/srv/origin.git', 'git init --bare')
+    // 存在しないファイルは、Object.prototype の値ではなく「ない」と答える
+    expect(execute(w, `cat ${name}`, at('/home/me/app')).stderr).toBe(
+      `cat: ${name}: No such file or directory\n`,
+    )
+    w = writeFile(w, '/home/me/app', name, `${name}\n`)
+    w = runIn(
+      w,
+      '/home/me/app',
+      'git init',
+      'git add .',
+      `git commit -m ${name}`,
+      `git remote add ${name} /srv/origin.git`,
+      `git push -u ${name} main`,
+    )
+    w = runIn(w, '/home/me', `git clone /srv/origin.git ${name}`)
+    expect(execute(w, 'ls', at('/home/me')).stdout).toBe(`${['app', name].sort().join('  ')}\n`)
+    expect(execute(w, `cd ${name}`, at('/home/me')).cwd).toBe(`/home/me/${name}`)
+    expect(execute(w, `cat ${name}`, at(`/home/me/${name}`)).stdout).toBe(`${name}\n`)
+
+    w = writeFile(w, '/home/me/app', name, 'changed\n')
+    w = runIn(w, '/home/me/app', 'git commit -am change', 'git push')
+    w = runIn(w, `/home/me/${name}`, 'git pull')
+    expect(execute(w, `cat ${name}`, at(`/home/me/${name}`)).stdout).toBe('changed\n')
+    expect(execute(w, `git config remote.${name}.url`, at('/home/me/app')).stdout).toBe(
+      '/srv/origin.git\n',
+    )
   })
 })

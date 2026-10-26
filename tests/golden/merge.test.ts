@@ -290,3 +290,22 @@ describe('リモートとのマージ', () => {
     ])
   })
 })
+
+describe('Object.prototype と同じ名前（検証レポート B1）', () => {
+  it.each(['toString', 'constructor', '__proto__', 'valueOf', 'hasOwnProperty'])('%s', (name) => {
+    expectSameAsRealGit([
+      ...diverged(
+        [{ write: [name, 'from main\n'] }, { git: ['add', name] }],
+        [{ write: [name, 'from feature\n'] }, { git: ['add', name] }],
+      ),
+      { git: ['merge', 'feature'], compare: out },
+      { git: ['status'], compare: out },
+      { check: true },
+      { write: [name, 'resolved\n'] },
+      { git: ['add', name] },
+      { git: ['status', '--short'], compare: out },
+      { git: ['commit', '--no-edit'] },
+      { git: ['log', '--oneline'], compare: out },
+    ])
+  })
+})

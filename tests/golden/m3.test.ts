@@ -281,3 +281,34 @@ describe('remote / 上流の設定', () => {
     ])
   })
 })
+
+describe('Object.prototype と同じ名前（検証レポート B1）', () => {
+  it.each(['toString', 'constructor', '__proto__', 'valueOf', 'hasOwnProperty'])('%s', (name) => {
+    expectSameAsRealGit([
+      ...seeded,
+      { in: 'npc', write: [name, 'v1\n'] },
+      { in: 'npc', git: ['add', name] },
+      { in: 'npc', git: ['commit', '-m', `add ${name}`] },
+      { in: 'npc', git: ['push'] },
+      { in: 'npc', git: ['switch', '-c', name] },
+      { in: 'npc', write: [name, 'v2\n'] },
+      { in: 'npc', git: ['commit', '-am', `edit ${name}`] },
+      { in: 'npc', git: ['push', '-u', 'origin', name], compare: out },
+      { in: '.', git: ['clone', ORIGIN, 'me'] },
+      { git: ['switch', name], compare: out },
+      { check: true },
+      // 2つ目のリモートには fetch しない（harness が followRemoteHEAD を origin にしか設定しないため）
+      { git: ['remote', 'add', name, ORIGIN] },
+      { git: ['remote', '-v'], compare: out },
+      { git: ['branch', '-r'], compare: out },
+      { git: ['config', `branch.${name}.remote`], compare: out },
+      { in: 'npc', remove: name },
+      { in: 'npc', git: ['commit', '-am', `remove ${name}`] },
+      { in: 'npc', git: ['push'] },
+      { git: ['pull'], compare: out },
+      { git: ['status'], compare: out },
+      { git: ['push', name, `HEAD:refs/heads/${name}-copy`] },
+      { in: 'origin.git', git: ['branch'], compare: out },
+    ])
+  })
+})
