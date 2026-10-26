@@ -1,7 +1,8 @@
 // 演出エンジンの入力・状態・出力の型（docs/04 §7）。
 import type { GitEvent } from '../engine/index.ts'
 
-export type Character = 'kouhai' | 'boss' | 'senpai'
+/** system はお知らせ・ボット・取引先など、人物ではない1行（信頼・機嫌は持たない） */
+export type Character = 'kouhai' | 'boss' | 'senpai' | 'system'
 
 /** 後輩のまなざし（docs/04 §3.1）：憧れ / 期待 / 不安 / 疑心 / 虚無 */
 export type TrustStage = 'admire' | 'expect' | 'worry' | 'doubt' | 'void'
@@ -31,6 +32,10 @@ export type DangerKind =
   | 'BAD_COMMIT_MESSAGE'
   | 'JUNK_STAGED'
   | 'CONFLICT_MARKER_COMMITTED'
+  /** detached HEAD で作ったコミットを、どのブランチからもたどれなくした */
+  | 'COMMITS_ORPHANED'
+  /** rm -rf .git でリポジトリごと消した */
+  | 'REPO_DELETED'
 
 /** ヤバ度（docs/06 §2.1）。1件のやらかしの大きさのラベル。ゲージではない */
 export type YabaLevel = 1 | 2 | 3 | 4 | 5
@@ -48,6 +53,13 @@ export interface DangerSignal {
 }
 
 /** 演出エンジンへの入力。at はシナリオ開始からの経過ミリ秒（docs/04 §8.3） */
+/** 結末の1行 */
+export interface EndingLine {
+  from: Character
+  key: string
+  vars?: Record<string, string>
+}
+
 export type DramaInput =
   | {
       type: 'command'
@@ -69,7 +81,16 @@ export type DramaInput =
   /** ヒントを見た。durationSec だけ作中の時計が飛ぶ */
   | { type: 'hint'; at: number; durationSec?: number }
   /** シナリオが決めた場面で、セリフを出す（間違った解消への反応など）。信頼・機嫌も動かせる */
-  | { type: 'note'; at: number; from: Character; key: string; trust?: number; mood?: number }
+  | {
+      type: 'note'
+      at: number
+      from: Character
+      key: string
+      trust?: number
+      mood?: number
+      /** セリフの {名前} を差し替える値（{message}、{n} など） */
+      vars?: Record<string, string>
+    }
   /** 時間の経過を知らせる（手が止まったときの反応や期限に使う） */
   | {
       type: 'tick'
@@ -85,6 +106,12 @@ export type DramaInput =
       replace?: Record<string, string>
       /** 結末の最後に足すセリフ。始末書があるときは出さない（ending.afterReport を優先する） */
       epilogue?: { from: Character; key: string }[]
+      /** 結末のセリフをまるごと決める（既定の onTime / thanks / late / afterReport の代わりに出す） */
+      script?: EndingLine[]
+      /** ゴールを満たさずに終わった（部長の pull が先に終わった など）。ランクは D */
+      failed?: boolean
+      /** ランクの上限（初動を間違えたら S にしない、など） */
+      maxRank?: Rank
     }
 
 export type Rank = 'S' | 'A' | 'B' | 'C' | 'D'

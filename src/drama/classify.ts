@@ -8,7 +8,9 @@ export function isObservation(command: string): boolean {
   if (program === undefined) return true
   if (program !== 'git') {
     // echo は、ファイルに書かなければ見るだけ
-    return ['ls', 'pwd', 'cat'].includes(program) || (program === 'echo' && !command.includes('>'))
+    return (
+      ['ls', 'pwd', 'cat', 'cd'].includes(program) || (program === 'echo' && !command.includes('>'))
+    )
   }
   const args = rest.filter((a) => !a.startsWith('-'))
   switch (sub) {

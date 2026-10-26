@@ -4,8 +4,11 @@ import { useStage } from '../store/stage.ts'
 
 export function GoalPanel() {
   const def = useStage((s) => s.def)
-  const world = useStage((s) => s.session?.world)
-  const goals = useMemo(() => (def && world ? def.goals(world) : []), [def, world])
+  const session = useStage((s) => s.session)
+  const goals = useMemo(
+    () => (def && session ? def.goals(session.world, session.progress, session.drama.reports) : []),
+    [def, session],
+  )
   if (!def || goals.length === 0) return null
   const all = goals.every((g) => g.done)
   return (

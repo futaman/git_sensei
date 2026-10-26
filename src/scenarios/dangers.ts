@@ -55,6 +55,10 @@ export function detectDangers(
   command: string,
   policy: DangerPolicy,
 ): DangerSignal[] {
+  // .git を消した後は git がないので、先に見る
+  if (events.some((e) => e.type === 'REPO_DELETED')) {
+    return [{ kind: 'REPO_DELETED', allowed: policy.allow?.('REPO_DELETED', command) ?? false }]
+  }
   const git = Object.hasOwn(after.workspaces, workspace) ? after.workspaces[workspace]?.git : null
   if (!git) return []
   const secrets = policy.secretPatterns ?? DEFAULT_SECRETS
@@ -111,6 +115,9 @@ export function detectDangers(
         if (junkFile) flag('JUNK_STAGED', junkFile)
         break
       }
+      case 'COMMITS_ORPHANED':
+        flag('COMMITS_ORPHANED', e.oids.map((o) => o.slice(0, 7)).join('、'))
+        break
       case 'CHANGES_DISCARDED':
         // ファイルを指定して戻すのは、わかってやっている取り消し。まとめて消したとき（reset --hard、'.'）だけ危険とみなす
         if (e.bulk) flag('UNCOMMITTED_CHANGES_DISCARDED', e.paths.join('、'))

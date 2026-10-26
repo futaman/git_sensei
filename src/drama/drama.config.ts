@@ -58,6 +58,8 @@ export const DRAMA = {
     CONFLICT_MARKER_COMMITTED: { severity: 'minor', mood: -10, level: 2 },
     BAD_COMMIT_MESSAGE: { severity: 'minor', mood: -5, level: 1 },
     JUNK_STAGED: { severity: 'minor', mood: -5, level: 1 },
+    COMMITS_ORPHANED: { severity: 'minor', mood: -10, level: 2 },
+    REPO_DELETED: { severity: 'major', mood: -30, level: 5 },
   } satisfies Record<DangerKind, { severity: Severity; mood: number; level: YabaLevel }>,
   idle: {
     /** この時間（ミリ秒）手が止まると後輩に「…」が出る（減点なし） */

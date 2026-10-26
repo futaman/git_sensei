@@ -115,7 +115,8 @@ describe('金曜17:45、定時前の push', () => {
   })
 
   it('ゴールのチェック：最初は田中さんの分だけ。force push で入れ替わり、正しく解決すると両方つく', () => {
-    const done = (p: Play) => FRIDAY_PUSH.goals(p.session.world).map((g) => g.done)
+    const done = (p: Play) =>
+      FRIDAY_PUSH.goals(p.session.world, p.session.progress, []).map((g) => g.done)
     const forced = new Play()
     expect(done(forced)).toEqual([false, true])
     forced.run('git push --force')

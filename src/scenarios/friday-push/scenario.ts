@@ -389,6 +389,7 @@ function helper(world: World, progress: StageProgress): string | undefined {
 
 export const FRIDAY_PUSH: StageDefinition = {
   id: 'friday-push',
+  number: '1-4',
   title: '金曜17:45、定時前の push',
   mission: MISSION,
   situation: SITUATION,

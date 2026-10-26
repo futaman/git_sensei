@@ -1,8 +1,19 @@
 // ステージの上に重ねるもの：導入、カットイン、始末書、結果、雷、push の動き。
 import { useEffect, useMemo, useState } from 'react'
 import { clockText, type DangerKind } from '../../drama/index.ts'
+import type { StageProgress } from '../../scenarios/stage.ts'
 import { now } from '../store/freeMode.ts'
 import { useStage } from '../store/stage.ts'
+
+const EMPTY_PROGRESS: StageProgress = {
+  milestones: [],
+  said: [],
+  flags: [],
+  choices: [],
+  fired: [],
+  memo: {},
+}
+
 import { FACE, MOOD } from './StageHeader.tsx'
 
 const CUTIN_TEXT = {
@@ -17,7 +28,10 @@ export function IntroModal() {
   const start = useStage((s) => s.start)
   const [untimed, setUntimed] = useState(false)
   // ゴールの文言だけ使う（達成の印は、遊び始めてから画面の右上に出す）
-  const goals = useMemo(() => (def ? def.goals(def.buildWorld(now())) : []), [def])
+  const goals = useMemo(
+    () => (def ? def.goals(def.buildWorld(now()), EMPTY_PROGRESS, []) : []),
+    [def],
+  )
   if (!def) return null
   return (
     <div className="fixed inset-0 z-40 grid place-items-center overflow-y-auto bg-slate-900/60 p-4">
@@ -163,6 +177,7 @@ export function ReportModal() {
             <Section label="なぜまずいか">{text.why}</Section>
             <Section label="直し方">{text.howToFix}</Section>
             <Section label="次からは">{text.prevention}</Section>
+            {text.cost && <Section label="損害額の内訳">{text.cost}</Section>}
           </dl>
         ) : (
           <p className="mt-4 text-sm">{open}</p>
@@ -252,7 +267,7 @@ export function ResultPanel({ onRetry, onExit }: { onRetry: () => void; onExit: 
     <div className="fixed inset-0 z-40 grid place-items-center bg-slate-900/60 p-4">
       <div className="stage-slide-in w-full max-w-md rounded-lg bg-white p-6 text-center shadow-xl">
         <p className="text-xs font-bold text-slate-400">{def.title}</p>
-        <p className="mt-1 text-lg font-bold">クリア</p>
+        <p className="mt-1 text-lg font-bold">{session.cleared ? 'クリア' : '終了'}</p>
         <div
           className={`stage-stamp mx-auto mt-4 grid h-28 w-28 place-items-center rounded-full border-8 text-6xl font-black ${RANK_CLASS[rank.rank]}`}
         >
@@ -278,7 +293,7 @@ export function ResultPanel({ onRetry, onExit }: { onRetry: () => void; onExit: 
             {MOOD[mood].icon} {MOOD[mood].label}
           </dd>
         </dl>
-        {rank.slow && <p className="mt-2 text-xs text-slate-500">（締切には間に合わなかった）</p>}
+        {rank.slow && <p className="mt-2 text-xs text-slate-500">（時間制限なしで遊んだ記録）</p>}
         <div className="mt-6 flex justify-center gap-2">
           <button
             type="button"

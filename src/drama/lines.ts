@@ -42,5 +42,7 @@ export const DEFAULT_LINES: Record<string, string[]> = {
     danger('CONFLICT_MARKER_COMMITTED', ['矢印が刺さったままだぞ']),
     danger('BAD_COMMIT_MESSAGE', ['"修正"って、何をだ']),
     danger('JUNK_STAGED', ['node_modules まで入ってるぞ']),
+    danger('COMMITS_ORPHANED', ['警告は読め。git は、言ってくれてる']),
+    danger('REPO_DELETED', ['….git ごと消したのか']),
   ]),
 }

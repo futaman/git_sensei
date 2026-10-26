@@ -9,7 +9,8 @@ const driveOf = (s: string) => /^[A-Za-z]:\//.exec(s)?.[0]
  * Windows のドライブ名から始まるパス（C:/Users/...）も絶対パスとして扱う
  */
 export function resolvePath(base: string, p: string): string {
-  const raw = p.replace(/^file:\/\//, '')
+  // https://host/path は、/host/path というサーバーの場所として扱う（シミュレータの中の origin）
+  const raw = p.replace(/^file:\/\//, '').replace(/^(https?|ssh):\/\//, '/')
   const full = raw.startsWith('/') || driveOf(raw) ? raw : `${base}/${raw}`
   const drive = driveOf(full)
   const out: string[] = []

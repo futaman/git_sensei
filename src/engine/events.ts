@@ -37,6 +37,8 @@ export type GitEvent =
   | { type: 'FILES_REMOVED'; paths: string[]; cached: boolean }
   /** git mv */
   | { type: 'FILE_MOVED'; from: string; to: string }
+  /** rm -rf .git でリポジトリ（履歴）ごと消した。作業ツリーのファイルは残る */
+  | { type: 'REPO_DELETED'; path: string }
   | { type: 'COMMIT_CREATED'; oid: Oid; parents: Oid[]; branch: string | null; amend: boolean }
   | { type: 'BRANCH_CREATED'; name: string; oid: Oid }
   | { type: 'BRANCH_DELETED'; name: string; oid: Oid; force: boolean }

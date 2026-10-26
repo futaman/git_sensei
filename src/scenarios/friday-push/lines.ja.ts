@@ -7,6 +7,7 @@ export const NAMES: Record<Character, string> = {
   boss: '黒岩部長',
   kouhai: '田中',
   senpai: '早瀬先輩',
+  system: 'お知らせ',
 }
 
 export const INTRO: StageDefinition['intro'] = [

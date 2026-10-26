@@ -24,14 +24,17 @@ import {
   type StageDefinition,
   type StageSession,
   type StageStep,
+  stageChoose,
   stageCommand,
   stageEdit,
   stageHint,
+  stageResetWorld,
   stageRollback,
   stageTick,
   startStage,
 } from '../../scenarios/stage.ts'
 import { HELP, MAX_LINES, now, outputLines, promptFor, type TerminalLine } from './freeMode.ts'
+import { useRecords } from './records.ts'
 
 export interface ChatMessage {
   id: number
@@ -94,6 +97,10 @@ interface StageState {
   tick: () => void
   run: (input: string) => void
   hint: () => void
+  /** チャットの選択肢を選ぶ */
+  choose: (id: string) => void
+  /** world だけを最初に戻す（やらかし道場） */
+  resetWorld: () => void
   rollback: () => void
   editFile: (path: string, content: string) => void
   createFile: (path: string) => string | null
@@ -192,7 +199,19 @@ export const useStage = create<StageState>()((set, get) => {
   /** 進行の1ステップを反映する */
   const apply = (step: StageStep, patch: Patch = {}) => {
     const s = get()
-    set(applyCues(s, step.cues, { ...patch, session: step.session }))
+    // NPC の操作（同僚の push など）は、ターミナルに紫の行で出す
+    if (step.npcLog && step.npcLog.length > 0) {
+      let id = patch.nextId ?? s.nextId
+      const npc = step.npcLog.map((text) => ({ id: id++, kind: 'npc' as const, text }))
+      patch.lines = [...(patch.lines ?? s.lines), ...npc].slice(-MAX_LINES)
+      patch.nextId = id
+    }
+    const next = applyCues(s, step.cues, { ...patch, session: step.session })
+    set(next)
+    // クリアしたら、いちばん良いランクを残す
+    if (next.rank && !s.rank && step.session.cleared && s.def) {
+      useRecords.getState().record(s.def.id, next.rank.rank)
+    }
   }
 
   return {
@@ -215,7 +234,11 @@ export const useStage = create<StageState>()((set, get) => {
           kind: 'info',
           text: `${def.title}：${def.mission.task}（締切 ${def.mission.due}）`,
         },
-        { id: id++, kind: 'info', text: 'まずは git status で、いまの状態を見てみましょう。' },
+        {
+          id: id++,
+          kind: 'info',
+          text: def.terminalIntro ?? 'まずは git status で、いまの状態を見てみましょう。',
+        },
       ]
       set({
         ...EMPTY,
@@ -293,6 +316,29 @@ export const useStage = create<StageState>()((set, get) => {
         nextId: id,
         effect,
         selectedFile: cwdChanged ? null : get().selectedFile,
+      })
+    },
+
+    choose(id) {
+      const { def, session, phase, untimed } = get()
+      if (!def || !session || phase !== 'playing') return
+      const at = elapsed()
+      apply(stageChoose(def, session, id, at, untimed), { at })
+    },
+
+    resetWorld() {
+      const { def, session, phase, untimed, nextId } = get()
+      if (!def || !session || phase !== 'playing') return
+      const at = elapsed()
+      apply(stageResetWorld(def, session, at, untimed), {
+        at,
+        effect: null,
+        selectedFile: null,
+        nextId: nextId + 1,
+        lines: [
+          ...get().lines,
+          { id: nextId, kind: 'info', text: `── ${def.resetWorld?.label ?? '元に戻しました'} ──` },
+        ],
       })
     },
 

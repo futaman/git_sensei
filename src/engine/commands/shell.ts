@@ -164,6 +164,7 @@ export function shell(cmd: Cmd, program: string, args: string[]): boolean {
           }
           // .git を消すと、履歴ごとなくなる（作業ツリーのファイルだけが残る）
           cmd.ws.git = null
+          cmd.events.push({ type: 'REPO_DELETED', path: cmd.ws.path })
           continue
         }
         if (isFile(cmd, path)) {

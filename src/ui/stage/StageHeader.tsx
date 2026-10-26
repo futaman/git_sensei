@@ -1,6 +1,7 @@
 // ステージの上の帯：今日のしごと、作中の時計、後輩のまなざし、部長の機嫌、ヒント。
 import { useEffect, useState } from 'react'
 import { clockText, type MoodStage, type TrustStage } from '../../drama/index.ts'
+import { gameSecOf } from '../../scenarios/stage.ts'
 import { useStage } from '../store/stage.ts'
 
 export const FACE: Record<TrustStage, { icon: string; label: string; gaze: string }> = {
@@ -154,6 +155,34 @@ function BossGauge() {
   )
 }
 
+const STATUS_TONE = {
+  normal: 'border-slate-200 bg-slate-50 text-slate-700',
+  warn: 'border-amber-300 bg-amber-50 text-amber-800',
+  danger: 'border-rose-300 bg-rose-50 text-rose-800',
+}
+
+/** ステージごとの数（待機室の人数、問い合わせの件数、損害額 など） */
+function StatusChips() {
+  const def = useStage((s) => s.def)
+  const session = useStage((s) => s.session)
+  const at = useStage((s) => s.at)
+  if (!def?.status || !session) return null
+  const items = def.status(session.world, session.progress, gameSecOf(def, session, at))
+  if (items.length === 0) return null
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {items.map((s) => (
+        <span
+          key={s.label}
+          className={`rounded border px-2 py-1 text-[11px] ${STATUS_TONE[s.tone ?? 'normal']}`}
+        >
+          {s.label} <span className="font-bold tabular-nums">{s.value}</span>
+        </span>
+      ))}
+    </div>
+  )
+}
+
 export function StageHeader({ onExit }: { onExit: () => void }) {
   const def = useStage((s) => s.def)
   const reports = useStage((s) => s.reports)
@@ -161,6 +190,7 @@ export function StageHeader({ onExit }: { onExit: () => void }) {
   const hint = useStage((s) => s.hint)
   const showReport = useStage((s) => s.showReport)
   const restart = useStage((s) => s.restart)
+  const resetWorld = useStage((s) => s.resetWorld)
   if (!def) return null
   const hintMin = Math.round((def.hintSec ?? 300) / 60)
   return (
@@ -173,6 +203,7 @@ export function StageHeader({ onExit }: { onExit: () => void }) {
       <Clock />
       <KouhaiGauge />
       <BossGauge />
+      <StatusChips />
       <div className="ml-auto flex shrink-0 items-center gap-2">
         {reports.length > 0 && (
           <button
@@ -181,6 +212,17 @@ export function StageHeader({ onExit }: { onExit: () => void }) {
             className="rounded border border-rose-300 bg-rose-50 px-2 py-1 text-xs text-rose-800 hover:bg-rose-100"
           >
             始末書 {reports.length}
+          </button>
+        )}
+        {def.resetWorld && (
+          <button
+            type="button"
+            onClick={resetWorld}
+            disabled={phase !== 'playing'}
+            title="リポジトリだけを最初の状態に戻します。始末書と損害額は残ります"
+            className="rounded border border-violet-300 px-3 py-1 text-xs text-violet-700 hover:bg-violet-50 disabled:opacity-50"
+          >
+            {def.resetWorld.label}
           </button>
         )}
         <button

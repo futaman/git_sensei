@@ -1,7 +1,7 @@
 // 演出エンジン本体（docs/04）。入力（コマンドの結果・選択・時間の経過）を受け取り、
 // 後輩の信頼・上司の機嫌・時計を更新して、演出キュー（Cue）を返す。
 // 純粋な関数：同じ設定・同じ入力の列なら、いつも同じ状態と同じキューになる（リプレイできる）。
-import { classify } from './classify.ts'
+import { classify, isObservation } from './classify.ts'
 import { remainingMs } from './clock.ts'
 import { DRAMA } from './drama.config.ts'
 import { DEFAULT_LINES, ESCALATING } from './lines.ts'
@@ -80,7 +80,7 @@ export function stepDrama(prev: DramaState, input: DramaInput, settings: DramaSe
       // シナリオが決めた場面のセリフ。手は動いていないので、手が止まった数え直しはしない
       if (input.trust) run.trust(input.trust)
       if (input.mood) run.mood(input.mood)
-      run.say(input.from, input.key, 'normal')
+      run.say(input.from, input.key, 'normal', undefined, input.vars)
       break
     case 'choice': {
       const effect = settings.choices?.find((c) => c.id === input.id)
@@ -133,8 +133,15 @@ class Run {
   }
 
   /** セリフを1つ選んでチャットに出す。level を渡すと、その段階の候補（きつさ）を使う */
-  say(from: Character, key: string, style: 'normal' | 'rage' | 'whisper', level?: number): void {
-    if (!this.settings.cast.includes(from)) return
+  say(
+    from: Character,
+    key: string,
+    style: 'normal' | 'rage' | 'whisper',
+    level?: number,
+    vars?: Record<string, string>,
+  ): void {
+    // system（お知らせ）は配役に関係なく出す
+    if (from !== 'system' && !this.settings.cast.includes(from)) return
     const candidates = this.settings.lines?.[key] ?? DEFAULT_LINES[key]
     if (!candidates || candidates.length === 0) return
     let index: number
@@ -147,7 +154,10 @@ class Run {
         index = (index + 1) % candidates.length
     }
     this.s.lastLine[key] = index
-    this.cues.push({ type: 'chat', from, key, text: candidates[index] as string, style })
+    const text = (candidates[index] as string).replace(/\{(\w+)\}/g, (m, name: string) =>
+      vars && Object.hasOwn(vars, name) ? (vars[name] as string) : m,
+    )
+    this.cues.push({ type: 'chat', from, key, text, style })
   }
 
   /** シードつきの乱数（mulberry32）。状態に種を持つので再現できる */
@@ -243,7 +253,9 @@ class Run {
     const s = this.s
     const category = classify(s, input)
     s.streak = category === s.lastCategory ? s.streak + 1 : 1
-    if (category !== 'observe' && category !== 'unsupported') s.moves++
+    // 見るだけのコマンドは、マイルストーンを満たしても手数に数えない
+    if (category !== 'observe' && category !== 'unsupported' && !isObservation(input.command))
+      s.moves++
     if (category !== 'error') s.consecutiveErrors = 0
 
     // 危険に見える操作（許可されたものも含む）の直前に確認していた
@@ -350,7 +362,9 @@ class Run {
     }
     // ランクより先に、物語の結末を見せる（docs/06 §7 の「余韻」）
     const reported = this.s.reports.length > 0 && this.settings.cast.includes('senpai')
-    if (reported) {
+    if (input.script) {
+      for (const e of input.script) this.say(e.from, e.key, 'normal', undefined, e.vars)
+    } else if (reported) {
       this.say('senpai', key('ending.afterReport'), 'normal')
     } else if (onTime) {
       this.say('boss', key('ending.onTime'), 'normal')
@@ -358,8 +372,12 @@ class Run {
     } else {
       this.say('boss', key('ending.late'), 'normal')
     }
-    if (!reported) for (const e of input.epilogue ?? []) this.say(e.from, e.key, 'normal')
-    const rank = this.rank(onTime)
+    if (!reported && !input.script)
+      for (const e of input.epilogue ?? []) this.say(e.from, e.key, 'normal')
+    const ORDER: Rank[] = ['S', 'A', 'B', 'C', 'D']
+    const raw = input.failed ? 'D' : this.rank(onTime)
+    const cap = input.maxRank ?? 'S'
+    const rank = ORDER.indexOf(raw) < ORDER.indexOf(cap) ? cap : raw
     const slow = this.settings.untimed
     this.s.finished = { rank, slow }
     this.cues.push({ type: 'rank', rank, slow })

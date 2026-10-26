@@ -47,6 +47,11 @@ export function describeEvent(e: GitEvent): { text: string; tone: Tone } {
           : `${e.paths.join(', ')} を削除して、その削除をステージしました`,
         tone: 'normal',
       }
+    case 'REPO_DELETED':
+      return {
+        text: `${e.path} の .git を消しました。履歴もブランチも、ここにはもうありません（push していたものは origin に残っています）`,
+        tone: 'danger',
+      }
     case 'FILE_MOVED':
       return {
         text: `${e.from} を ${e.to} に移動（名前変更）して、ステージしました`,
