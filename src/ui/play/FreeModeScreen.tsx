@@ -32,7 +32,9 @@ export function FreeModeScreen() {
   const files = useMemo(() => (ws ? fileStates(ws) : []), [ws])
   const view = useMemo(() => (ws?.git && !ws.git.bare ? repoView(ws.git) : null), [ws])
   const remotes = useMemo(() => (ws ? remoteSummaries(world, ws) : []), [world, ws])
-  const content = selected !== null && ws ? own(ws.files, selected) : undefined
+  const raw = selected !== null && ws ? own(ws.files, selected) : undefined
+  // 文字列以外を CodeMirror に渡すと、例外ではなく固まることがある（壊れた状態への備え）
+  const content = typeof raw === 'string' ? raw : undefined
   const nextBeat = teamBeatTitle(beat)
 
   return (
