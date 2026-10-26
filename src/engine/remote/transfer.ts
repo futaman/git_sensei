@@ -1,4 +1,5 @@
 // リポジトリ間のオブジェクトのやりとり（fetch / push / clone の中身）と、コミットの数え方。
+import { has, own } from '../model/dict.ts'
 import type { GitDir, Oid } from '../model/types.ts'
 import { ancestors, readCommit } from '../objects/store.ts'
 
@@ -8,7 +9,7 @@ function reachableObjects(git: GitDir, tips: Oid[]): Set<Oid> {
   const visitTree = (oid: Oid) => {
     if (out.has(oid)) return
     out.add(oid)
-    const tree = git.objects[oid]
+    const tree = own(git.objects, oid)
     if (tree?.type !== 'tree') return
     for (const e of tree.entries) {
       if (e.mode === '40000') visitTree(e.oid)
@@ -28,7 +29,7 @@ function reachableObjects(git: GitDir, tips: Oid[]): Set<Oid> {
 /** from にあって to にないオブジェクトを to に写す */
 export function copyObjects(from: GitDir, to: GitDir, tips: Oid[]): void {
   for (const oid of reachableObjects(from, tips)) {
-    if (!(oid in to.objects)) to.objects[oid] = from.objects[oid] as GitDir['objects'][Oid]
+    if (!has(to.objects, oid)) to.objects[oid] = own(from.objects, oid) as GitDir['objects'][Oid]
   }
 }
 

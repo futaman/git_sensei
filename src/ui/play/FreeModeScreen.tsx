@@ -1,6 +1,6 @@
 // フリーモードの画面（docs/03 §2.2 の PC レイアウト。右側はチャットの代わりに「できごと」）
 import { lazy, Suspense, useMemo } from 'react'
-import { fileStates, remoteSummaries, repoView } from '../../engine/index.ts'
+import { fileStates, own, remoteSummaries, repoView } from '../../engine/index.ts'
 import { FourAreas } from '../components/areas/FourAreas.tsx'
 import { EventLog } from '../components/events/EventLog.tsx'
 import { FilePanel } from '../components/files/FilePanel.tsx'
@@ -28,11 +28,11 @@ export function FreeModeScreen() {
   const reset = useFreeMode((s) => s.reset)
   const runNextBeat = useFreeMode((s) => s.runNextBeat)
 
-  const ws = world.workspaces[cwd]
+  const ws = own(world.workspaces, cwd)
   const files = useMemo(() => (ws ? fileStates(ws) : []), [ws])
   const view = useMemo(() => (ws?.git && !ws.git.bare ? repoView(ws.git) : null), [ws])
   const remotes = useMemo(() => (ws ? remoteSummaries(world, ws) : []), [world, ws])
-  const content = selected !== null ? ws?.files[selected] : undefined
+  const content = selected !== null && ws ? own(ws.files, selected) : undefined
   const nextBeat = teamBeatTitle(beat)
 
   return (

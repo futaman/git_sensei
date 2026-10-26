@@ -1,5 +1,6 @@
 // HEAD・index・作業ツリーの3者を比べて、変更の一覧を作る（status / commit / switch が使う）。
 
+import { has, own } from '../model/dict.ts'
 import type { FilePath, GitDir, Workspace } from '../model/types.ts'
 import { hashBlob } from '../objects/serialize.ts'
 import { commitTree, type FlatTree } from '../objects/store.ts'
@@ -21,7 +22,7 @@ export interface WorktreeStatus {
 export type UnmergedCode = 'UU' | 'AA' | 'UD' | 'DU' | 'AU' | 'UA' | 'DD'
 
 export function unmergedCode(git: GitDir, path: FilePath): UnmergedCode {
-  const e = git.unmerged[path] ?? {}
+  const e = own(git.unmerged, path) ?? {}
   const [b, o, t] = [!!e.base, !!e.ours, !!e.theirs]
   if (o && t) return b ? 'UU' : 'AA'
   if (o) return b ? 'UD' : 'AU'
@@ -37,19 +38,19 @@ export function computeStatus(git: GitDir, ws: Workspace): WorktreeStatus {
 
   for (const path of new Set([...Object.keys(head), ...Object.keys(git.index)])) {
     if (unmerged.has(path)) continue
-    const h = head[path]
-    const i = git.index[path]
+    const h = own(head, path)
+    const i = own(git.index, path)
     if (!h && i) staged.set(path, 'A')
     else if (h && !i) staged.set(path, 'D')
     else if (h && i && (h.oid !== i.oid || h.mode !== i.mode)) staged.set(path, 'M')
   }
   for (const [path, entry] of Object.entries(git.index)) {
-    const content = ws.files[path]
+    const content = own(ws.files, path)
     if (content === undefined) unstaged.set(path, 'D')
     else if (hashBlob(content) !== entry.oid) unstaged.set(path, 'M')
   }
   const untracked = Object.keys(ws.files)
-    .filter((p) => !(p in git.index) && !unmerged.has(p))
+    .filter((p) => !has(git.index, p) && !unmerged.has(p))
     .sort()
   return { head, staged, unstaged, untracked, unmerged }
 }

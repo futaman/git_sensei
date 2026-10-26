@@ -1,3 +1,4 @@
+import { dict, own } from '../model/dict.ts'
 import { basename, emptyGitDir, findWorkspace, resolvePath } from '../model/paths.ts'
 import { commitTree } from '../objects/store.ts'
 import { parseArgs } from '../parser/options.ts'
@@ -53,17 +54,17 @@ export function clone(cmd: Cmd, argv: string[]): void {
   for (const [ref, oid] of branches) git.refs[`${REMOTES}origin/${ref.slice(HEADS.length)}`] = oid
 
   const key = existing?.[0] ?? destPath
-  const ws = existing?.[1] ?? { path: destPath, files: {}, git: null }
+  const ws = existing?.[1] ?? { path: destPath, files: dict(), git: null }
   cmd.world.workspaces[key] = ws
   ws.git = git
 
-  const headOid = srcGit.refs[branchRef(srcHead)]
+  const headOid = own(srcGit.refs, branchRef(srcHead))
   // 空のリポジトリでも、まだないブランチを上流として設定しておく（git と同じ）
   setUpstream(git, srcHead, 'origin', srcHead)
   if (headOid) {
     git.symrefs[`${REMOTES}origin/HEAD`] = `${REMOTES}origin/${srcHead}`
     git.refs[branchRef(srcHead)] = headOid
-    const result = switchTrees(git, ws, {}, commitTree(git, headOid))
+    const result = switchTrees(git, ws, dict(), commitTree(git, headOid))
     if (!result.ok) throw new Error('空のディレクトリへのチェックアウトに失敗しました')
   } else if (!quiet) {
     cmd.err.push('warning: You appear to have cloned an empty repository.')

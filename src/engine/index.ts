@@ -19,12 +19,14 @@ import { shell } from './commands/shell.ts'
 import { status } from './commands/status.ts'
 import { checkoutCmd, switchCmd } from './commands/switch.ts'
 import type { GitEvent } from './events.ts'
+import { copyDict, dict, own } from './model/dict.ts'
 import { findWorkspace, resolvePath } from './model/paths.ts'
-import type { ExecContext, FilePath, World } from './model/types.ts'
+import type { ExecContext, FilePath, GitDir, Workspace, World } from './model/types.ts'
 import { tokenize } from './parser/tokenize.ts'
 
 export type { CommandResult } from './commands/context.ts'
 export type { GitEvent, PushRejectReason, RefUpdate } from './events.ts'
+export { has, own } from './model/dict.ts'
 export { findWorkspace, resolvePath } from './model/paths.ts'
 export type * from './model/types.ts'
 export * from './query.ts'
@@ -72,20 +74,45 @@ export function createWorld(
   globalConfig: Record<string, string> = {},
 ): World {
   return {
-    workspaces: Object.fromEntries(
+    workspaces: dict(
       Object.entries(workspaces).map(([id, w]) => [
         id,
-        { path: w.path, files: { ...w.files }, git: null },
+        { path: w.path, files: copyDict(w.files ?? {}), git: null },
       ]),
     ),
-    globalConfig: { ...globalConfig },
+    globalConfig: copyDict(globalConfig),
+  }
+}
+
+/**
+ * JSON から読み込んだ world を、エンジンが扱える形に戻す。
+ * 名前をキーにする表をすべてプロトタイプなしの表にする（'__proto__' という名前のファイルなどのため）
+ */
+export function reviveWorld(saved: World): World {
+  const reviveGit = (git: GitDir): GitDir => ({
+    ...git,
+    objects: copyDict(git.objects),
+    refs: copyDict(git.refs),
+    symrefs: copyDict(git.symrefs),
+    index: copyDict(git.index),
+    unmerged: copyDict(git.unmerged),
+    config: copyDict(git.config),
+  })
+  const reviveWorkspace = (ws: Workspace): Workspace => ({
+    path: ws.path,
+    files: copyDict(ws.files),
+    git: ws.git ? reviveGit(ws.git) : null,
+  })
+  return {
+    workspaces: dict(Object.entries(saved.workspaces).map(([id, ws]) => [id, reviveWorkspace(ws)])),
+    globalConfig: copyDict(saved.globalConfig),
   }
 }
 
 /** エディタでの編集に相当する。ファイルの作成と上書き */
 export function writeFile(world: World, workspace: string, path: FilePath, content: string): World {
   return produce(world, (draft) => {
-    const ws = draft.workspaces[workspace]
+    const ws = own(draft.workspaces, workspace)
     if (!ws) throw new Error(`ワークスペース ${workspace} がありません`)
     ws.files[path] = content
   })
@@ -96,13 +123,13 @@ export function addWorkspace(world: World, path: string): World {
   const abs = resolvePath('/', path)
   if (findWorkspace(world, abs)) return world
   return produce(world, (draft) => {
-    draft.workspaces[abs] = { path: abs, files: {}, git: null }
+    draft.workspaces[abs] = { path: abs, files: dict(), git: null }
   })
 }
 
 export function deleteFile(world: World, workspace: string, path: FilePath): World {
   return produce(world, (draft) => {
-    const ws = draft.workspaces[workspace]
+    const ws = own(draft.workspaces, workspace)
     if (!ws) throw new Error(`ワークスペース ${workspace} がありません`)
     delete ws.files[path]
   })
@@ -124,7 +151,7 @@ export function execute(world: World, input: string, ctx: ExecContext): ExecuteR
 
   try {
     next = produce(world, (draft) => {
-      const ws = draft.workspaces[ctx.workspace]
+      const ws = own(draft.workspaces, ctx.workspace)
       if (!ws) throw new Error(`ワークスペース ${ctx.workspace} がありません`)
       const cmd: Cmd = { world: draft, ws, ctx, out, err, events }
       try {
@@ -158,7 +185,7 @@ function run(cmd: Cmd, argv: string[]): void {
     cmd.err.push('usage: git <command> [<args>]')
     throw new Exit(1, true)
   }
-  const handler = GIT_COMMANDS[sub]
+  const handler = own(GIT_COMMANDS, sub)
   if (handler) {
     handler(cmd, rest)
     return

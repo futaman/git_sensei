@@ -1,6 +1,7 @@
 // git switch / git checkout（ブランチの切り替え部分）。
 
 import type { HeadPosition } from '../events.ts'
+import { has, own } from '../model/dict.ts'
 import type { GitDir, Oid } from '../model/types.ts'
 import { abbrev, ancestors, commitTree, readCommit } from '../objects/store.ts'
 import { parseArgs } from '../parser/options.ts'
@@ -48,7 +49,7 @@ export function switchCmd(cmd: Cmd, argv: string[]): void {
   if (positionals.length === 0) fail(cmd, 'fatal: missing branch or commit argument')
   if (positionals.length > 1) fail(cmd, 'fatal: only one reference expected')
   const name = resolvePrevious(cmd, git, positionals[0] as string)
-  if (branchRef(name) in git.refs) {
+  if (has(git.refs, branchRef(name))) {
     moveHead(cmd, git, { branch: name })
     return
   }
@@ -91,7 +92,7 @@ export function checkoutCmd(cmd: Cmd, argv: string[]): void {
   if (positionals.length > 1) unsupported(cmd, 'git checkout <commit> <file>（ファイルの復元）')
 
   const spec = resolvePrevious(cmd, git, positionals[0] as string)
-  if (!flags.has('detach') && branchRef(spec) in git.refs) {
+  if (!flags.has('detach') && has(git.refs, branchRef(spec))) {
     moveHead(cmd, git, { branch: spec })
     return
   }
@@ -105,7 +106,7 @@ export function checkoutCmd(cmd: Cmd, argv: string[]): void {
     moveHead(cmd, git, { detach: oid, spec })
     return
   }
-  if (spec in cmd.ws.files || Object.keys(git.index).some((p) => p === spec)) {
+  if (has(cmd.ws.files, spec) || Object.keys(git.index).some((p) => p === spec)) {
     unsupported(cmd, 'git checkout <file>（ファイルの復元）')
   }
   fail(cmd, `error: pathspec '${spec}' did not match any file(s) known to git`, 1)
@@ -138,7 +139,7 @@ function refuseDuringConflict(cmd: Cmd, git: GitDir, isSwitch: boolean): void {
  * （git switch feature で origin/feature を追跡するブランチが作られる）
  */
 function guessRemoteBranch(git: GitDir, name: string): string | null {
-  const hits = listRemotes(git).filter((r) => `${REMOTES}${r}/${name}` in git.refs)
+  const hits = listRemotes(git).filter((r) => has(git.refs, `${REMOTES}${r}/${name}`))
   return hits.length === 1 ? `${hits[0]}/${name}` : null
 }
 
@@ -157,7 +158,7 @@ function startNewBranch(
 ): void {
   if (start === undefined && headOid(git) === null) {
     // まだコミットがないリポジトリ：HEAD が指すブランチ名を変えるだけ
-    if (branchRef(name) in git.refs && !force)
+    if (has(git.refs, branchRef(name)) && !force)
       fail(cmd, `fatal: a branch named '${name}' already exists`)
     const from = headPosition(git)
     git.head = { type: 'symbolic', ref: branchRef(name) }
@@ -187,7 +188,7 @@ export function moveHead(
     cmd.out.push(...trackingLines(git))
     return
   }
-  const toOid = 'branch' in dest ? (git.refs[branchRef(dest.branch)] ?? null) : dest.detach
+  const toOid = 'branch' in dest ? (own(git.refs, branchRef(dest.branch)) ?? null) : dest.detach
   const result = switchTrees(git, cmd.ws, commitTree(git, fromOid), commitTree(git, toOid))
   if (!result.ok) {
     cmd.err.push(...switchErrorLines(result, 'checkout'))

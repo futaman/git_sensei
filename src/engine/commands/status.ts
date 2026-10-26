@@ -1,3 +1,4 @@
+import { own } from '../model/dict.ts'
 import type { GitDir } from '../model/types.ts'
 import { abbrev } from '../objects/store.ts'
 import { parseArgs } from '../parser/options.ts'
@@ -38,7 +39,7 @@ function branchHeaderShort(git: GitDir): string {
   if (!head) return `No commits yet on ${branch}`
   const upstream = upstreamOf(git, branch)
   if (!upstream) return branch
-  const theirs = git.refs[upstream.tracking]
+  const theirs = own(git.refs, upstream.tracking)
   if (!theirs) return `${branch}...${upstream.name} [gone]`
   const { ahead, behind } = aheadBehind(git, head, theirs)
   const parts = [ahead > 0 ? `ahead ${ahead}` : '', behind > 0 ? `behind ${behind}` : ''].filter(
@@ -56,7 +57,7 @@ export function trackingLines(git: GitDir): string[] {
   if (branch === null || head === null) return []
   const upstream = upstreamOf(git, branch)
   if (!upstream) return []
-  const theirs = git.refs[upstream.tracking]
+  const theirs = own(git.refs, upstream.tracking)
   if (!theirs) {
     return [
       `Your branch is based on '${upstream.name}', but the upstream is gone.`,

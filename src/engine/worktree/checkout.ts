@@ -1,6 +1,7 @@
 // HEAD をある tree から別の tree に移すときの、index と作業ツリーの更新（git read-tree -m -u 相当）。
 // 手元の変更は、移動先と衝突しない限りそのまま持ち越す。衝突するなら何も変えずに失敗する。
 
+import { own } from '../model/dict.ts'
 import type { FilePath, GitDir, IndexEntry, Workspace } from '../model/types.ts'
 import { hashBlob } from '../objects/serialize.ts'
 import { type FlatTree, readBlob } from '../objects/store.ts'
@@ -24,11 +25,11 @@ export function switchTrees(
 
   const paths = [...new Set([...Object.keys(from), ...Object.keys(to)])].sort()
   for (const path of paths) {
-    const f = from[path]
-    const t = to[path]
+    const f = own(from, path)
+    const t = own(to, path)
     if (same(f, t)) continue
-    const i = git.index[path]
-    const w = ws.files[path]
+    const i = own(git.index, path)
+    const w = own(ws.files, path)
 
     if (i) {
       if (same(i, t)) {
@@ -68,9 +69,9 @@ export function localChangeLines(git: GitDir, ws: Workspace, head: FlatTree): st
   const lines: string[] = []
   const paths = [...new Set([...Object.keys(head), ...Object.keys(git.index)])].sort()
   for (const path of paths) {
-    const h = head[path]
-    const i = git.index[path]
-    const w = ws.files[path]
+    const h = own(head, path)
+    const i = own(git.index, path)
+    const w = own(ws.files, path)
     if (!i) {
       if (h) lines.push(`D\t${path}`)
     } else if (w === undefined) {

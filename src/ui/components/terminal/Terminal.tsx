@@ -1,5 +1,5 @@
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
-import { completionNames, fileStates, repoView, serverPaths } from '../../../engine/index.ts'
+import { completionNames, fileStates, own, repoView, serverPaths } from '../../../engine/index.ts'
 import { promptFor, type TerminalLine, useFreeMode } from '../../store/freeMode.ts'
 import { suggestChips } from './chips.ts'
 import { complete } from './completion.ts'
@@ -38,7 +38,7 @@ export function Terminal() {
   const inputRef = useRef<HTMLInputElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
-  const ws = world.workspaces[cwd]
+  const ws = own(world.workspaces, cwd)
   const chips = useMemo(() => {
     if (!ws) return []
     const children = Object.values(world.workspaces)

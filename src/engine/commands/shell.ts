@@ -1,4 +1,5 @@
 // git 以外の最小限のシェルコマンド（cd / pwd / ls / cat）。clone したフォルダに入るために使う。
+import { own } from '../model/dict.ts'
 import { findWorkspace, parentPath, resolvePath } from '../model/paths.ts'
 import { type Cmd, fail } from './context.ts'
 
@@ -41,7 +42,7 @@ export function shell(cmd: Cmd, program: string, args: string[]): boolean {
     case 'cat': {
       if (args.length === 0) fail(cmd, 'cat: ファイル名を指定してください', 1)
       for (const name of args) {
-        const content = cmd.ws.files[resolvePath('/', name).slice(1)]
+        const content = own(cmd.ws.files, resolvePath('/', name).slice(1))
         if (content === undefined) fail(cmd, `cat: ${name}: No such file or directory`, 1)
         cmd.out.push(content.replace(/\n$/, ''))
       }

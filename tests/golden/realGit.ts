@@ -164,14 +164,15 @@ export class RealGitRepo {
 
   private files(name: string): Record<string, string> {
     const base = this.dir(name)
-    const out: Record<string, string> = {}
+    // '__proto__' という名前のファイルを落とさないよう、代入ではなく fromEntries で作る
+    const out: [string, string][] = []
     for (const e of readdirSync(base, { recursive: true, withFileTypes: true })) {
       if (!e.isFile()) continue
       const path = relative(base, join(e.parentPath, e.name)).replaceAll('\\', '/')
       if (path === '.git' || path.startsWith('.git/')) continue
-      out[path] = readFileSync(join(base, path), 'utf8')
+      out.push([path, readFileSync(join(base, path), 'utf8')])
     }
-    return Object.fromEntries(Object.entries(out).sort(([a], [b]) => (a < b ? -1 : 1)))
+    return Object.fromEntries(out.sort(([a], [b]) => (a < b ? -1 : 1)))
   }
 
   dispose(): void {

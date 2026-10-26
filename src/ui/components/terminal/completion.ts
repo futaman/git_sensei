@@ -101,7 +101,9 @@ export function complete(input: string, names: CompletionNames): CompletionResul
   else {
     const sub = before[1] as string
     const argIndex = before.slice(2).filter((t) => !t.startsWith('-')).length
-    pool = current.startsWith('-') ? (OPTIONS[sub] ?? []) : argumentCandidates(sub, argIndex, names)
+    // sub は利用者の入力。'toString' などで Object.prototype の値を拾わないようにする
+    const options = Object.hasOwn(OPTIONS, sub) ? (OPTIONS[sub] ?? []) : []
+    pool = current.startsWith('-') ? options : argumentCandidates(sub, argIndex, names)
   }
 
   const hits = [...new Set(pool)].filter((c) => c.startsWith(current))

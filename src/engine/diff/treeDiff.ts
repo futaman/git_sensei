@@ -1,5 +1,6 @@
 // 2つの tree（平らな表）の差分と、diffstat の整形。
 
+import { own } from '../model/dict.ts'
 import type { FileMode, FilePath, GitDir } from '../model/types.ts'
 import type { FlatTree } from '../objects/store.ts'
 import { countChanges } from './lines.ts'
@@ -14,7 +15,7 @@ export interface FileChange {
 
 function blobText(git: GitDir, oid: string | undefined): string {
   if (!oid) return ''
-  const obj = git.objects[oid]
+  const obj = own(git.objects, oid)
   return obj?.type === 'blob' ? obj.content : ''
 }
 
@@ -22,8 +23,8 @@ export function diffTrees(git: GitDir, before: FlatTree, after: FlatTree): FileC
   const paths = [...new Set([...Object.keys(before), ...Object.keys(after)])].sort()
   const changes: FileChange[] = []
   for (const path of paths) {
-    const a = before[path]
-    const b = after[path]
+    const a = own(before, path)
+    const b = own(after, path)
     if (a && b && a.oid === b.oid && a.mode === b.mode) continue
     const { ins, del } = countChanges(blobText(git, a?.oid), blobText(git, b?.oid))
     const status = !a ? 'A' : !b ? 'D' : 'M'

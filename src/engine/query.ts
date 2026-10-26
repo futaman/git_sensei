@@ -1,5 +1,6 @@
 // 画面に表示するための読み取り専用の問い合わせ。状態は変えない。
 import { subjectOf } from './commands/commit.ts'
+import { has, own } from './model/dict.ts'
 import { findWorkspace, resolvePath } from './model/paths.ts'
 import type { FilePath, GitDir, Oid, Workspace, World } from './model/types.ts'
 import { abbrev, readCommit } from './objects/store.ts'
@@ -38,7 +39,7 @@ export function fileStates(ws: Workspace): FileState[] {
         ? 'modified'
         : unstaged === 'D'
           ? 'deleted'
-          : !(path in git.index) && path in ws.files
+          : !has(git.index, path) && has(ws.files, path)
             ? 'untracked'
             : 'clean'
     return { path, worktree, staged: st.staged.get(path) ?? null }
@@ -119,7 +120,7 @@ export function remoteSummaries(world: World, ws: Workspace): RemoteSummary[] {
   const git = ws.git
   if (!git) return []
   return listRemotes(git).map((name) => {
-    const url = git.config[`remote.${name}.url`] ?? ''
+    const url = own(git.config, `remote.${name}.url`) ?? ''
     const target = findWorkspace(world, resolvePath(ws.path, url))?.[1].git ?? null
     const actualRefs = target
       ? Object.entries(target.refs).filter(([r]) => r.startsWith(HEADS))
@@ -132,12 +133,12 @@ export function remoteSummaries(world: World, ws: Workspace): RemoteSummary[] {
         .map((r) => r.slice(prefix.length)),
     ])
     const branches = [...names].sort().map((b) => {
-      const known = git.refs[prefix + b] ?? null
-      const local = git.refs[HEADS + b] ?? null
+      const known = own(git.refs, prefix + b) ?? null
+      const local = own(git.refs, HEADS + b) ?? null
       const counts = known && local ? aheadBehind(git, local, known) : { ahead: 0, behind: 0 }
       return {
         name: b,
-        actual: target?.refs[HEADS + b] ?? null,
+        actual: (target && own(target.refs, HEADS + b)) ?? null,
         known,
         local,
         ...counts,

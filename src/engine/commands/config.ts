@@ -1,4 +1,5 @@
 // git config（値の読み書き）。--global は world 全体、それ以外はリポジトリごとの設定。
+import { has, own } from '../model/dict.ts'
 import { parseArgs } from '../parser/options.ts'
 import { type Cmd, exitKeep, fail } from './context.ts'
 
@@ -41,16 +42,16 @@ export function config(cmd: Cmd, argv: string[]): void {
 
   const target = global ? cmd.world.globalConfig : local
   if (flags.has('unset')) {
-    if (!target || !(key in target)) exitKeep(5)
+    if (!target || !has(target, key)) exitKeep(5)
     delete target[key]
     return
   }
   if (value === undefined || flags.has('get')) {
     const found = global
-      ? cmd.world.globalConfig[key]
+      ? own(cmd.world.globalConfig, key)
       : flags.has('local')
-        ? local?.[key]
-        : (local?.[key] ?? cmd.world.globalConfig[key])
+        ? local && own(local, key)
+        : ((local && own(local, key)) ?? own(cmd.world.globalConfig, key))
     if (found === undefined) exitKeep(1)
     cmd.out.push(found)
     return

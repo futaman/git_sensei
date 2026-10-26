@@ -1,5 +1,6 @@
 import { diffTrees, modeLines, summaryLine } from '../diff/treeDiff.ts'
 import { formatGitDate } from '../format/date.ts'
+import { own } from '../model/dict.ts'
 import type { CommitObject, Signature } from '../model/types.ts'
 import {
   abbrev,
@@ -105,7 +106,7 @@ export function commit(cmd: Cmd, argv: string[]): void {
 
   if (flags.has('all')) {
     for (const [path, entry] of Object.entries(git.index)) {
-      const content = cmd.ws.files[path]
+      const content = own(cmd.ws.files, path)
       if (content === undefined) delete git.index[path]
       else git.index[path] = { oid: writeObject(git, { type: 'blob', content }), mode: entry.mode }
     }

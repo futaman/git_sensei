@@ -1,5 +1,6 @@
 // ファイル単位の3-wayマージ（git の ort 戦略の基本部分）と、マージベースの計算。
 // 名前の変更（rename）の検出やディレクトリとファイルの衝突は扱わない。
+import { dict, own } from '../model/dict.ts'
 import type { FilePath, GitDir, IndexEntry, Oid, UnmergedEntry } from '../model/types.ts'
 import { ancestors, type FlatTree, readBlob, writeObject } from '../objects/store.ts'
 import { mergeText } from './lineMerge.ts'
@@ -41,7 +42,7 @@ export function mergeTrees(
   theirs: FlatTree,
   labels: { ours: string; theirs: string },
 ): TreeMergeResult {
-  const clean: FlatTree = {}
+  const clean: FlatTree = dict()
   const conflicts: TreeConflict[] = []
   const messages: string[] = []
   const paths = [
@@ -49,9 +50,9 @@ export function mergeTrees(
   ].sort()
 
   for (const path of paths) {
-    const b = base[path]
-    const o = ours[path]
-    const t = theirs[path]
+    const b = own(base, path)
+    const o = own(ours, path)
+    const t = own(theirs, path)
     let result: IndexEntry | undefined
     if (same(o, t)) result = o
     else if (same(o, b)) result = t

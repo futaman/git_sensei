@@ -1,4 +1,5 @@
 // ワークスペース（ディレクトリ）のパスの扱い。区切りは '/'、絶対パスは '/' から始まる。
+import { dict } from './dict.ts'
 import type { GitDir, Workspace, World } from './types.ts'
 
 const driveOf = (s: string) => /^[A-Za-z]:\//.exec(s)?.[0]
@@ -40,14 +41,14 @@ export function findWorkspace(world: World, path: string): [string, Workspace] |
 export function emptyGitDir(branch: string, bare: boolean): GitDir {
   return {
     bare,
-    objects: {},
-    refs: {},
-    symrefs: {},
+    objects: dict(),
+    refs: dict(),
+    symrefs: dict(),
     head: { type: 'symbolic', ref: `refs/heads/${branch}` },
-    index: {},
-    unmerged: {},
+    index: dict(),
+    unmerged: dict(),
     merge: null,
-    config: {},
+    config: dict(),
     previousBranch: null,
     detachedAt: null,
   }

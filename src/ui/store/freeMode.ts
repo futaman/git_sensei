@@ -8,6 +8,8 @@ import {
   type ExecContext,
   execute,
   type GitEvent,
+  has,
+  own,
   type Workspace,
   type World,
   writeFile,
@@ -117,11 +119,11 @@ function initialStage(preset: Preset): Stage {
 
 /** いまいるフォルダ */
 export function currentWorkspace(s: { world: World; cwd: string }): Workspace | undefined {
-  return s.world.workspaces[s.cwd]
+  return own(s.world.workspaces, s.cwd)
 }
 
 export function promptFor(world: World, cwd: string): string {
-  const ws = world.workspaces[cwd]
+  const ws = own(world.workspaces, cwd)
   const path = ws?.path ?? cwd
   const shown =
     path === HOME ? '~' : path.startsWith(`${HOME}/`) ? `~${path.slice(HOME.length)}` : path
@@ -244,7 +246,7 @@ export const useFreeMode = create<FreeModeState>()(
       },
       createFile(path) {
         const ws = currentWorkspace(get())
-        if (!ws || path in ws.files) {
+        if (!ws || has(ws.files, path)) {
           set({ selectedFile: path })
           return
         }

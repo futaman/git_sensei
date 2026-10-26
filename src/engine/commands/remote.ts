@@ -1,3 +1,4 @@
+import { has, own } from '../model/dict.ts'
 import { parseArgs } from '../parser/options.ts'
 import { listRemotes, REMOTES } from '../refs.ts'
 import { type Cmd, exitKeep, fail, requireRepo, unsupported } from './context.ts'
@@ -10,7 +11,7 @@ export function remote(cmd: Cmd, argv: string[]): void {
     for (const name of listRemotes(git)) {
       if (sub === undefined) cmd.out.push(name)
       else {
-        const url = git.config[`remote.${name}.url`]
+        const url = own(git.config, `remote.${name}.url`)
         cmd.out.push(`${name}\t${url} (fetch)`, `${name}\t${url} (push)`)
       }
     }
@@ -26,7 +27,7 @@ export function remote(cmd: Cmd, argv: string[]): void {
       const [name, url] = args
       if (name === undefined || url === undefined || args.length > 2)
         fail(cmd, 'usage: git remote add <name> <url>', 129)
-      if (`remote.${name}.url` in git.config) {
+      if (has(git.config, `remote.${name}.url`)) {
         cmd.err.push(`error: remote ${name} already exists.`)
         exitKeep(3)
       }
@@ -39,7 +40,7 @@ export function remote(cmd: Cmd, argv: string[]): void {
     case 'rm': {
       const [name] = args
       if (name === undefined) fail(cmd, 'usage: git remote remove <name>', 129)
-      if (!(`remote.${name}.url` in git.config)) {
+      if (!has(git.config, `remote.${name}.url`)) {
         cmd.err.push(`error: No such remote: '${name}'`)
         exitKeep(2)
       }
@@ -63,7 +64,7 @@ export function remote(cmd: Cmd, argv: string[]): void {
     }
     case 'get-url': {
       const [name] = args
-      const url = name === undefined ? undefined : git.config[`remote.${name}.url`]
+      const url = name === undefined ? undefined : own(git.config, `remote.${name}.url`)
       if (url === undefined) {
         cmd.err.push(`error: No such remote '${name ?? ''}'`)
         exitKeep(2)

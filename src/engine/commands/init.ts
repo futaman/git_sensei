@@ -1,3 +1,4 @@
+import { own } from '../model/dict.ts'
 import { emptyGitDir } from '../model/paths.ts'
 import { parseArgs } from '../parser/options.ts'
 import { isValidBranchName } from '../refs.ts'
@@ -24,7 +25,7 @@ export function init(cmd: Cmd, argv: string[]): void {
   }
 
   const branch =
-    args.values.get('branch')?.[0] ?? cmd.world.globalConfig['init.defaultBranch'] ?? 'main'
+    args.values.get('branch')?.[0] ?? own(cmd.world.globalConfig, 'init.defaultBranch') ?? 'main'
   if (!isValidBranchName(branch)) fail(cmd, `fatal: invalid initial branch name: '${branch}'`)
 
   cmd.ws.git = emptyGitDir(branch, bare)

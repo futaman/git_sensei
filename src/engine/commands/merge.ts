@@ -1,5 +1,6 @@
 import { diffstat, diffTrees, modeLines } from '../diff/treeDiff.ts'
 import { mergeBases, mergeTrees } from '../merge/treeMerge.ts'
+import { has, own } from '../model/dict.ts'
 import type { GitDir, Oid } from '../model/types.ts'
 import {
   abbrev,
@@ -103,8 +104,8 @@ export function mergeMessage(
   const current = currentBranch(git)
   const into = current && current !== 'main' && current !== 'master' ? ` into ${current}` : ''
   if (from) return `Merge branch '${from.branch}' of ${from.url}${into}\n`
-  if (branchRef(spec) in git.refs) return `Merge branch '${spec}'${into}\n`
-  if (`${REMOTES}${spec}` in git.refs) return `Merge remote-tracking branch '${spec}'${into}\n`
+  if (has(git.refs, branchRef(spec))) return `Merge branch '${spec}'${into}\n`
+  if (has(git.refs, `${REMOTES}${spec}`)) return `Merge remote-tracking branch '${spec}'${into}\n`
   return `Merge commit '${spec}'${into}\n`
 }
 
@@ -148,12 +149,12 @@ export function threeWayMerge(
   // マージで書き換わるファイルに、未ステージの変更や未追跡のファイルがあれば止める
   const touched = new Set([
     ...Object.keys({ ...ours, ...result.clean }).filter(
-      (p) => ours[p]?.oid !== result.clean[p]?.oid,
+      (p) => own(ours, p)?.oid !== own(result.clean, p)?.oid,
     ),
     ...result.conflicts.map((c) => c.path),
   ])
   const dirty = [...touched].filter((p) => st.unstaged.has(p)).sort()
-  const untracked = [...touched].filter((p) => !(p in ours) && p in cmd.ws.files).sort()
+  const untracked = [...touched].filter((p) => !has(ours, p) && has(cmd.ws.files, p)).sort()
   if (dirty.length > 0 || untracked.length > 0) {
     if (dirty.length > 0) cmd.err.push(...OVERWRITE_LOCAL(dirty))
     if (untracked.length > 0) {
@@ -170,7 +171,7 @@ export function threeWayMerge(
 
   // index と作業ツリーに書く
   for (const path of touched) {
-    const entry = result.clean[path]
+    const entry = own(result.clean, path)
     if (entry) {
       git.index[path] = { ...entry }
       cmd.ws.files[path] = readBlob(git, entry.oid).content
@@ -231,9 +232,9 @@ function abortMerge(cmd: Cmd, git: GitDir): void {
     ...Object.keys(head),
   ])
   for (const path of paths) {
-    const h = head[path]
-    const i = git.index[path]
-    const conflicted = path in git.unmerged
+    const h = own(head, path)
+    const i = own(git.index, path)
+    const conflicted = has(git.unmerged, path)
     if (!conflicted && h?.oid === i?.oid && h?.mode === i?.mode) continue
     delete git.unmerged[path]
     if (h) {

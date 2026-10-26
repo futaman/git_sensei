@@ -1,5 +1,6 @@
 // ブランチ、HEAD、リビジョン指定（HEAD~1 など）の解決。
 import type { HeadPosition } from './events.ts'
+import { own } from './model/dict.ts'
 import type { GitDir, Oid, RefName } from './model/types.ts'
 import { readCommit } from './objects/store.ts'
 
@@ -16,7 +17,7 @@ export function currentBranch(git: GitDir): string | null {
 
 /** HEAD が指すコミット。まだコミットがないブランチなら null */
 export function headOid(git: GitDir): Oid | null {
-  return git.head.type === 'detached' ? git.head.oid : (git.refs[git.head.ref] ?? null)
+  return git.head.type === 'detached' ? git.head.oid : (own(git.refs, git.head.ref) ?? null)
 }
 
 export function headPosition(git: GitDir): HeadPosition {
@@ -47,9 +48,9 @@ export const REMOTES = 'refs/remotes/'
 
 /** refs/remotes/origin/main のような ref。symref（origin/HEAD）も辿る */
 export function readRef(git: GitDir, ref: RefName): Oid | null {
-  const target = git.symrefs[ref]
-  if (target) return git.refs[target] ?? null
-  return git.refs[ref] ?? null
+  const target = own(git.symrefs, ref)
+  if (target) return own(git.refs, target) ?? null
+  return own(git.refs, ref) ?? null
 }
 
 /** 'origin/main' のような名前の一覧（origin/HEAD は除く） */
@@ -80,8 +81,8 @@ export interface Upstream {
 
 /** branch.<name>.remote / branch.<name>.merge から上流ブランチを求める */
 export function upstreamOf(git: GitDir, branch: string): Upstream | null {
-  const remote = git.config[`branch.${branch}.remote`]
-  const merge = git.config[`branch.${branch}.merge`]
+  const remote = own(git.config, `branch.${branch}.remote`)
+  const merge = own(git.config, `branch.${branch}.merge`)
   if (!remote || !merge?.startsWith(HEADS)) return null
   const name = `${remote}/${merge.slice(HEADS.length)}`
   return { remote, merge, tracking: REMOTES + name, name }
@@ -137,7 +138,7 @@ function resolveBase(git: GitDir, base: string): Oid | null {
   if (base.startsWith('refs/')) return readRef(git, base)
   if (/^[0-9a-f]{4,40}$/.test(base)) {
     const hits = Object.keys(git.objects).filter(
-      (o) => o.startsWith(base) && git.objects[o]?.type === 'commit',
+      (o) => o.startsWith(base) && own(git.objects, o)?.type === 'commit',
     )
     if (hits.length === 1) return hits[0] as Oid
   }

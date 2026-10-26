@@ -42,3 +42,19 @@ describe('src/drama は engine の型だけに依存する', () => {
     expect(valueImports ?? [], 'engine からは import type を使う').toEqual([])
   })
 })
+
+// `key in obj` は Object.prototype の名前（'toString' など）も「ある」と答える。
+// 利用者が決める名前を調べるときは has / own（Object.hasOwn）を使う。
+// 判別共用体の `'branch' in dest` のように、左が文字列リテラルのものだけは許す。
+describe.each(['src/engine', 'src/ui'])('%s は in 演算子で存在を調べない', (dir) => {
+  it.each(sourceFiles(dir))('%s', (file) => {
+    const code = readCode(file)
+      .replace(/'(?:[^'\\\n]|\\.)*'/g, "''")
+      .replace(/"(?:[^"\\\n]|\\.)*"/g, '""')
+      .replace(/`(?:[^`\\]|\\.)*`/g, '``')
+    const found = [...code.matchAll(/(\S+)\s+in\s+[\w$(]/g)]
+      .filter((m) => !/(''|"")$/.test(m[1] as string))
+      .map((m) => m[0])
+    expect(found, 'Object.hasOwn（engine の has / own）を使う').toEqual([])
+  })
+})

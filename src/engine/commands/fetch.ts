@@ -1,4 +1,5 @@
 import type { RefUpdate } from '../events.ts'
+import { has, own } from '../model/dict.ts'
 import type { GitDir } from '../model/types.ts'
 import { abbrev, isAncestor } from '../objects/store.ts'
 import { parseArgs } from '../parser/options.ts'
@@ -54,7 +55,7 @@ export function fetchFrom(
   const nameWidth = Math.max(0, ...names.map((n) => n.length))
   for (const b of wanted) {
     const ref = `${REMOTES}${tracking}/${b.name}`
-    const old = git.refs[ref] ?? null
+    const old = own(git.refs, ref) ?? null
     if (old === b.oid) continue
     const forced = old !== null && !isAncestor(git, old, b.oid)
     git.refs[ref] = b.oid
@@ -79,7 +80,7 @@ export function fetchFrom(
       if (!ref.startsWith(prefix)) continue
       const name = ref.slice(prefix.length)
       if (srcBranches.some((b) => b.name === name)) continue
-      updates.push({ branch: name, from: git.refs[ref] ?? null, to: null, forced: false })
+      updates.push({ branch: name, from: own(git.refs, ref) ?? null, to: null, forced: false })
       delete git.refs[ref]
       lines.push(
         `${refLine('-', '[deleted]')} ${'(none)'.padEnd(nameWidth)} -> ${tracking}/${name}`,
@@ -92,12 +93,12 @@ export function fetchFrom(
   if (remote.name && !opts.branches) {
     const symref = `${REMOTES}${remote.name}/HEAD`
     const policy =
-      git.config[`remote.${remote.name}.followremotehead`] ??
-      cmd.world.globalConfig[`remote.${remote.name}.followremotehead`] ??
+      own(git.config, `remote.${remote.name}.followremotehead`) ??
+      own(cmd.world.globalConfig, `remote.${remote.name}.followremotehead`) ??
       'create'
     const remoteHead = currentBranch(remote.git)
     const target = remoteHead ? `${REMOTES}${remote.name}/${remoteHead}` : null
-    if (policy !== 'never' && !(symref in git.symrefs) && target && target in git.refs) {
+    if (policy !== 'never' && !has(git.symrefs, symref) && target && has(git.refs, target)) {
       git.symrefs[symref] = target
     }
   }

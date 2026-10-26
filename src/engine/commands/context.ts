@@ -1,5 +1,6 @@
 // 各コマンドの実装が共通で使う型と道具。
 import type { GitEvent } from '../events.ts'
+import { own } from '../model/dict.ts'
 import type { ExecContext, GitDir, Workspace, World } from '../model/types.ts'
 
 export interface CommandResult {
@@ -71,5 +72,5 @@ export function requireWorktree(cmd: Cmd): GitDir {
 }
 
 export function configValue(cmd: Cmd, key: string): string | undefined {
-  return cmd.ws.git?.config[key] ?? cmd.world.globalConfig[key]
+  return (cmd.ws.git ? own(cmd.ws.git.config, key) : undefined) ?? own(cmd.world.globalConfig, key)
 }

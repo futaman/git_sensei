@@ -1,4 +1,5 @@
 // オブジェクトの保存と読み出し。tree と index（パス→blob の平らな表）の相互変換もここで行う。
+import { dict, has, own } from '../model/dict.ts'
 import type {
   BlobObject,
   CommitObject,
@@ -15,7 +16,7 @@ import { hashObject } from './serialize.ts'
 
 export function writeObject(git: GitDir, obj: GitObject): Oid {
   const oid = hashObject(obj)
-  if (!(oid in git.objects)) git.objects[oid] = obj
+  if (!has(git.objects, oid)) git.objects[oid] = obj
   return oid
 }
 
@@ -24,7 +25,7 @@ function read<T extends GitObject['type']>(
   oid: Oid,
   type: T,
 ): Extract<GitObject, { type: T }> {
-  const obj = git.objects[oid]
+  const obj = own(git.objects, oid)
   if (!obj || obj.type !== type) throw new Error(`${type} ${oid} がありません`)
   return obj as Extract<GitObject, { type: T }>
 }
@@ -37,7 +38,7 @@ export const readCommit = (git: GitDir, oid: Oid): CommitObject => read(git, oid
 export type FlatTree = Record<FilePath, IndexEntry>
 
 export function flattenTree(git: GitDir, treeOid: Oid, prefix = ''): FlatTree {
-  const out: FlatTree = {}
+  const out: FlatTree = dict()
   for (const e of readTree(git, treeOid).entries) {
     const path = prefix + e.name
     if (e.mode === '40000') Object.assign(out, flattenTree(git, e.oid, `${path}/`))
@@ -47,7 +48,7 @@ export function flattenTree(git: GitDir, treeOid: Oid, prefix = ''): FlatTree {
 }
 
 export function commitTree(git: GitDir, commitOid: Oid | null): FlatTree {
-  return commitOid ? flattenTree(git, readCommit(git, commitOid).tree) : {}
+  return commitOid ? flattenTree(git, readCommit(git, commitOid).tree) : dict()
 }
 
 /** index（平らな表）から tree オブジェクトを作り、ルートの oid を返す */

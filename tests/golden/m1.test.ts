@@ -373,3 +373,29 @@ describe('merge（fast-forward）', () => {
     ])
   })
 })
+
+describe('Object.prototype と同じ名前のファイル・ブランチ', () => {
+  it.each(['toString', 'constructor', '__proto__', 'valueOf', 'hasOwnProperty'])('%s', (name) => {
+    expectSameAsRealGit([
+      { git: ['init'] },
+      { write: [name, 'v1\n'] },
+      { git: ['status'], compare: out },
+      { write: [name, 'v2\n'] },
+      // 最後の1ファイルを消す commit -a は本物の git でも空振りするので、もう1つ置いておく
+      { write: ['keep.txt', 'k\n'] },
+      { git: ['add', name, 'keep.txt'] },
+      { git: ['commit', '-m', `add ${name}`], compare: out },
+      { git: ['switch', '-c', name] },
+      { remove: name },
+      { git: ['status'], compare: out },
+      { git: ['status', '--short'], compare: out },
+      { git: ['commit', '-am', `remove ${name}`], compare: out },
+      { git: ['switch', 'main'] },
+      { check: true },
+      { git: ['switch', name] },
+      { check: true },
+      { git: [name] },
+      { git: ['log', '--oneline', name], compare: out },
+    ])
+  })
+})

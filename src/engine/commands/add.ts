@@ -1,3 +1,4 @@
+import { has, own } from '../model/dict.ts'
 import { writeObject } from '../objects/store.ts'
 import { parseArgs } from '../parser/options.ts'
 import { pathspecMatcher } from '../worktree/pathspec.ts'
@@ -33,7 +34,7 @@ export function add(cmd: Cmd, argv: string[]): void {
       ...Object.keys(git.unmerged),
     ]),
   ]
-    .filter((p) => !update || p in git.index || p in git.unmerged)
+    .filter((p) => !update || has(git.index, p) || has(git.unmerged, p))
     .sort()
 
   const matched = new Set<string>()
@@ -46,8 +47,8 @@ export function add(cmd: Cmd, argv: string[]): void {
 
   const staged: string[] = []
   for (const path of [...matched].sort()) {
-    const content = cmd.ws.files[path]
-    const conflict = git.unmerged[path]
+    const content = own(cmd.ws.files, path)
+    const conflict = own(git.unmerged, path)
     if (conflict) {
       // add すると、コンフリクトを解消したことになる（stage 1〜3 を消して stage 0 にする）
       delete git.unmerged[path]
@@ -63,7 +64,7 @@ export function add(cmd: Cmd, argv: string[]): void {
       })
       continue
     }
-    const before = git.index[path]
+    const before = own(git.index, path)
     if (content === undefined) {
       if (before) {
         delete git.index[path]

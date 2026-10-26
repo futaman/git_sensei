@@ -1,3 +1,4 @@
+import { dict, own } from '../model/dict.ts'
 import { commitTree, isAncestor } from '../objects/store.ts'
 import { parseArgs } from '../parser/options.ts'
 import { branchRef, currentBranch, headOid, REMOTES, upstreamOf } from '../refs.ts'
@@ -76,14 +77,14 @@ export function pull(cmd: Cmd, argv: string[]): void {
   if (mergeBranch === null) noTracking(remoteName)
 
   const target =
-    (remote.name ? git.refs[`${REMOTES}${remote.name}/${mergeBranch}`] : undefined) ??
-    remote.git.refs[branchRef(mergeBranch)]
+    (remote.name ? own(git.refs, `${REMOTES}${remote.name}/${mergeBranch}`) : undefined) ??
+    own(remote.git.refs, branchRef(mergeBranch))
   if (!target) fail(cmd, `fatal: couldn't find remote ref ${mergeBranch}`)
 
   const head = headOid(git)
   if (head === null) {
     // まだコミットがないブランチ：取ってきたものをそのまま展開する
-    const result = switchTrees(git, cmd.ws, {}, commitTree(git, target))
+    const result = switchTrees(git, cmd.ws, dict(), commitTree(git, target))
     if (!result.ok) {
       cmd.err.push(...switchErrorLines(result, 'merge'))
       exitKeep(1)
@@ -102,14 +103,14 @@ export function pull(cmd: Cmd, argv: string[]): void {
   }
 
   // 分岐している
-  const ffOnly = flags.has('ff-only') || git.config['pull.ff'] === 'only'
+  const ffOnly = flags.has('ff-only') || own(git.config, 'pull.ff') === 'only'
   const rebase =
-    flags.has('rebase') || (git.config['pull.rebase'] === 'true' && !flags.has('no-rebase'))
+    flags.has('rebase') || (own(git.config, 'pull.rebase') === 'true' && !flags.has('no-rebase'))
   const merge =
     flags.has('no-rebase') ||
     flags.has('ff') ||
     flags.has('no-ff') ||
-    git.config['pull.rebase'] === 'false'
+    own(git.config, 'pull.rebase') === 'false'
   if (ffOnly) {
     cmd.err.push('fatal: Not possible to fast-forward, aborting.')
     exitKeep(128)

@@ -1,4 +1,5 @@
 import type { PushRejectReason, RefUpdate } from '../events.ts'
+import { has, own } from '../model/dict.ts'
 import type { Oid } from '../model/types.ts'
 import { abbrev, isAncestor, readCommit } from '../objects/store.ts'
 import { parseArgs } from '../parser/options.ts'
@@ -112,7 +113,7 @@ export function push(cmd: Cmd, argv: string[]): void {
     specs.push({
       src: branch,
       srcBranch: branch,
-      oid: git.refs[branchRef(branch)] ?? null,
+      oid: own(git.refs, branchRef(branch)) ?? null,
       dst: upstream.merge.slice(HEADS.length),
       force: false,
     })
@@ -134,7 +135,7 @@ export function push(cmd: Cmd, argv: string[]): void {
       }
       const srcBranch = left === 'HEAD' ? branch : left.replace(/^refs\/heads\//, '')
       const oid =
-        (srcBranch !== null ? git.refs[branchRef(srcBranch)] : undefined) ??
+        (srcBranch !== null ? own(git.refs, branchRef(srcBranch)) : undefined) ??
         resolveRevision(git, left)
       if (!oid) {
         cmd.err.push(
@@ -143,7 +144,7 @@ export function push(cmd: Cmd, argv: string[]): void {
         )
         exitKeep(1)
       }
-      const isBranch = srcBranch !== null && branchRef(srcBranch) in git.refs
+      const isBranch = srcBranch !== null && has(git.refs, branchRef(srcBranch))
       specs.push({
         src: left,
         srcBranch: isBranch ? srcBranch : null,
@@ -163,7 +164,7 @@ export function push(cmd: Cmd, argv: string[]): void {
   for (const spec of specs) {
     const dstRef = branchRef(spec.dst)
     const trackingRef = tracking ? `${REMOTES}${tracking}/${spec.dst}` : null
-    const old = remote.git.refs[dstRef] ?? null
+    const old = own(remote.git.refs, dstRef) ?? null
 
     if (spec.oid === null) {
       if (old === null) {
@@ -193,9 +194,9 @@ export function push(cmd: Cmd, argv: string[]): void {
     }
 
     let forced = false
-    if (old !== null && !(old in git.objects && isAncestor(git, old, spec.oid))) {
+    if (old !== null && !(has(git.objects, old) && isAncestor(git, old, spec.oid))) {
       if (flags.has('force-with-lease')) {
-        const expected = trackingRef ? (git.refs[trackingRef] ?? null) : null
+        const expected = trackingRef ? (own(git.refs, trackingRef) ?? null) : null
         if (expected !== old) {
           lines.push(`${refLine('!', '[rejected]')} ${arrow} (stale info)`)
           rejected.push({ dst: spec.dst, reason: 'stale-info' })
@@ -205,7 +206,7 @@ export function push(cmd: Cmd, argv: string[]): void {
       } else if (flags.has('force') || spec.force) {
         forced = true
       } else {
-        const reason = old in git.objects ? 'non-fast-forward' : 'fetch-first'
+        const reason = has(git.objects, old) ? 'non-fast-forward' : 'fetch-first'
         lines.push(`${refLine('!', '[rejected]')} ${arrow} (${reason.replaceAll('-', ' ')})`)
         rejected.push({ dst: spec.dst, reason })
         continue

@@ -1,3 +1,4 @@
+import { has, own } from '../model/dict.ts'
 import type { GitDir, Oid } from '../model/types.ts'
 import { abbrev, isAncestor } from '../objects/store.ts'
 import { parseArgs } from '../parser/options.ts'
@@ -90,7 +91,7 @@ function listAll(cmd: Cmd, git: GitDir, which: 'local' | 'remotes' | 'all'): voi
       .map((r) => r.slice(REMOTES.length)),
   ].sort()
   for (const name of names) {
-    const target = git.symrefs[REMOTES + name]
+    const target = own(git.symrefs, REMOTES + name)
     cmd.out.push(`  ${prefix}${name}${target ? ` -> ${target.slice(REMOTES.length)}` : ''}`)
   }
 }
@@ -98,7 +99,7 @@ function listAll(cmd: Cmd, git: GitDir, which: 'local' | 'remotes' | 'all'): voi
 /** 'origin/main' のような名前を、リモート名とブランチ名に分ける（その追跡ブランチがあるときだけ） */
 function splitRemoteBranch(git: GitDir, name: string): { remote: string; branch: string } | null {
   const short = name.replace(/^refs\/remotes\//, '')
-  if (!(REMOTES + short in git.refs)) return null
+  if (!has(git.refs, REMOTES + short)) return null
   for (const remote of listRemotes(git)) {
     if (short.startsWith(`${remote}/`)) return { remote, branch: short.slice(remote.length + 1) }
   }
@@ -114,7 +115,7 @@ function setUpstreamTo(cmd: Cmd, git: GitDir, upstream: string, name: string | u
   const local = name ?? currentBranch(git)
   if (local === null)
     fail(cmd, 'fatal: could not set upstream of HEAD when it does not point to any branch')
-  if (!(branchRef(local) in git.refs)) fail(cmd, `fatal: branch '${local}' does not exist`)
+  if (!has(git.refs, branchRef(local))) fail(cmd, `fatal: branch '${local}' does not exist`)
   const target = splitRemoteBranch(git, upstream)
   if (!target) {
     fail(
@@ -141,7 +142,7 @@ export function createBranch(
 ): Oid {
   if (!isValidBranchName(name)) fail(cmd, `fatal: '${name}' is not a valid branch name`)
   const ref = branchRef(name)
-  if (ref in git.refs && !force) fail(cmd, `fatal: a branch named '${name}' already exists`)
+  if (has(git.refs, ref) && !force) fail(cmd, `fatal: a branch named '${name}' already exists`)
   if (force && name === currentBranch(git)) {
     fail(
       cmd,
@@ -170,7 +171,7 @@ function deleteBranches(cmd: Cmd, git: GitDir, names: string[], force: boolean):
   const head = headOid(git)
   for (const name of names) {
     const ref = branchRef(name)
-    const oid = git.refs[ref]
+    const oid = own(git.refs, ref)
     if (!oid) {
       cmd.err.push(`error: branch '${name}' not found`)
       failed = true
@@ -183,7 +184,7 @@ function deleteBranches(cmd: Cmd, git: GitDir, names: string[], force: boolean):
     }
     // 上流があれば上流に、なければ HEAD にマージ済みかで判断する
     const upstream = upstreamOf(git, name)
-    const upstreamOid = upstream ? git.refs[upstream.tracking] : undefined
+    const upstreamOid = upstream ? own(git.refs, upstream.tracking) : undefined
     const mergedTo = upstreamOid ?? head
     if (!force && !(mergedTo && isAncestor(git, oid, mergedTo))) {
       cmd.err.push(
@@ -219,16 +220,16 @@ function renameBranch(cmd: Cmd, git: GitDir, positionals: string[], force: boole
       : [current, positionals[0] as string]
   if (from === null) fail(cmd, 'fatal: cannot rename the current branch while not on any')
   const fromRef = branchRef(from)
-  const unbornCurrent = from === current && !(fromRef in git.refs)
-  if (!(fromRef in git.refs) && !unbornCurrent) {
+  const unbornCurrent = from === current && !has(git.refs, fromRef)
+  if (!has(git.refs, fromRef) && !unbornCurrent) {
     fail(cmd, `error: refname refs/heads/${from} not found\nfatal: branch rename failed`)
   }
   if (!isValidBranchName(to)) fail(cmd, `fatal: '${to}' is not a valid branch name`)
   const toRef = branchRef(to)
-  if (toRef in git.refs && !force && from !== to) {
+  if (has(git.refs, toRef) && !force && from !== to) {
     fail(cmd, `fatal: a branch named '${to}' already exists`)
   }
-  const oid = git.refs[fromRef]
+  const oid = own(git.refs, fromRef)
   delete git.refs[fromRef]
   if (oid) git.refs[toRef] = oid
   for (const [key, value] of Object.entries(git.config)) {
