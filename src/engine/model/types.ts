@@ -54,6 +54,21 @@ export interface IndexEntry {
 
 export type Head = { type: 'symbolic'; ref: RefName } | { type: 'detached'; oid: Oid }
 
+/** コンフリクト中のファイルの、index の stage 1（共通の祖先）/ 2（自分）/ 3（相手） */
+export interface UnmergedEntry {
+  base?: IndexEntry
+  ours?: IndexEntry
+  theirs?: IndexEntry
+}
+
+/** マージの途中（コンフリクトで止まっている）。本物の .git/MERGE_HEAD と MERGE_MSG に当たる */
+export interface MergeState {
+  /** 取り込もうとしているコミット */
+  head: Oid
+  /** コミットするときの既定のメッセージ */
+  message: string
+}
+
 export interface GitDir {
   /** 作業ツリーを持たないリポジトリ（サーバー側の origin など） */
   bare: boolean
@@ -62,7 +77,10 @@ export interface GitDir {
   /** 別の ref を指す ref（refs/remotes/origin/HEAD → refs/remotes/origin/main） */
   symrefs: Record<RefName, RefName>
   head: Head
+  /** stage 0（ふつうの状態）の index。コンフリクト中のファイルはここになく unmerged にある */
   index: Record<FilePath, IndexEntry>
+  unmerged: Record<FilePath, UnmergedEntry>
+  merge: MergeState | null
   config: Record<string, string>
   /** `git switch -` で戻る先のブランチ名 */
   previousBranch: string | null

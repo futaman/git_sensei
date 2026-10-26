@@ -30,6 +30,7 @@ export function switchCmd(cmd: Cmd, argv: string[]): void {
   if (!parsed.ok) fail(cmd, parsed.error, 129)
   const { flags, values, positionals } = parsed.args
   const git = requireWorktree(cmd)
+  refuseDuringConflict(cmd, git, true)
 
   const create = values.get('create')?.[0] ?? values.get('force-create')?.[0]
   if (create !== undefined) {
@@ -77,6 +78,7 @@ export function checkoutCmd(cmd: Cmd, argv: string[]): void {
   if (!parsed.ok) fail(cmd, parsed.error, 129)
   const { flags, values, positionals } = parsed.args
   const git = requireWorktree(cmd)
+  refuseDuringConflict(cmd, git, false)
   if (argv.includes('--')) unsupported(cmd, 'git checkout -- <file>（ファイルの復元）')
 
   const create = values.get('branch')?.[0] ?? values.get('force-branch')?.[0]
@@ -107,6 +109,28 @@ export function checkoutCmd(cmd: Cmd, argv: string[]): void {
     unsupported(cmd, 'git checkout <file>（ファイルの復元）')
   }
   fail(cmd, `error: pathspec '${spec}' did not match any file(s) known to git`, 1)
+}
+
+/** コンフリクトの途中は切り替えられない（switch はマージの途中そのものも断る） */
+function refuseDuringConflict(cmd: Cmd, git: GitDir, isSwitch: boolean): void {
+  // switch は、コンフリクトが残っているかより先に「マージの途中か」を見る
+  if (isSwitch && git.merge) {
+    fail(
+      cmd,
+      [
+        'fatal: cannot switch branch while merging',
+        'Consider "git merge --quit" or "git worktree add".',
+      ].join('\n'),
+    )
+  }
+  const paths = Object.keys(git.unmerged).sort()
+  if (paths.length > 0) {
+    cmd.err.push(
+      'error: you need to resolve your current index first',
+      ...paths.map((p) => `${p}: needs merge`),
+    )
+    abort(1)
+  }
 }
 
 /**

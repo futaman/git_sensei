@@ -4,6 +4,7 @@ import { EditorState } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
 import { basicSetup } from 'codemirror'
 import { useEffect, useRef } from 'react'
+import { conflictHighlight } from './conflictHighlight.ts'
 
 interface Props {
   path: string
@@ -28,6 +29,7 @@ export function Editor({ path, content, onChange }: Props) {
         extensions: [
           basicSetup,
           EditorView.lineWrapping,
+          conflictHighlight,
           EditorView.updateListener.of((u) => {
             if (u.docChanged) onChangeRef.current(u.state.doc.toString())
           }),

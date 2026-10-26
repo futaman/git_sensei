@@ -76,11 +76,23 @@ export function log(cmd: Cmd, argv: string[]): void {
     const d = deco.get(oid)
     if (i > 0) cmd.out.push('')
     cmd.out.push(`commit ${oid}${d ? ` (${d})` : ''}`)
+    if (c.parents.length > 1)
+      cmd.out.push(`Merge: ${c.parents.map((p) => abbrev(git, p)).join(' ')}`)
     cmd.out.push(`Author: ${c.author.name} <${c.author.email}>`)
     cmd.out.push(`Date:   ${formatGitDate(c.author.timestamp, c.author.tzOffset)}`)
     cmd.out.push('')
-    for (const line of c.message.replace(/\n$/, '').split('\n')) cmd.out.push(`    ${line}`)
+    // git log は本文のタブを8桁ごとの空白に展開する（--expand-tabs が既定）
+    for (const line of c.message.replace(/\n$/, '').split('\n')) {
+      cmd.out.push(`    ${expandTabs(line)}`)
+    }
   })
+}
+
+/** タブを、行頭から数えて8桁ごとの位置までの空白にする */
+function expandTabs(line: string): string {
+  let out = ''
+  for (const ch of line) out += ch === '\t' ? ' '.repeat(8 - (out.length % 8)) : ch
+  return out
 }
 
 /** コミット日時の新しい順にたどる（同じ日時なら見つけた順） */

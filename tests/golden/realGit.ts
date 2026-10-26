@@ -61,6 +61,8 @@ export class RealGitRepo {
       LANG: 'C',
       GIT_AUTHOR_DATE: FIXED_DATE,
       GIT_COMMITTER_DATE: FIXED_DATE,
+      // エディタが開く場面では、そのまま保存したことにする
+      GIT_EDITOR: 'true',
     }
   }
 
@@ -151,10 +153,13 @@ export class RealGitRepo {
     )
       .map((l) => this.normalize(l, simRoot))
       .sort()
-    if (bare) return { bare, head, refs, commits, config, index: [], worktree: {}, status: '' }
+    const merge = this.exec(['rev-parse', '-q', '--verify', 'MERGE_HEAD'], name).stdout.trim()
+    if (bare) {
+      return { bare, head, refs, commits, config, merge, index: [], worktree: {}, status: '' }
+    }
     const index = lines(this.git(['ls-files', '-s'], name))
     const status = this.exec(['status', '--porcelain'], name).stdout
-    return { bare, head, refs, commits, config, index, worktree: this.files(name), status }
+    return { bare, head, refs, commits, config, merge, index, worktree: this.files(name), status }
   }
 
   private files(name: string): Record<string, string> {

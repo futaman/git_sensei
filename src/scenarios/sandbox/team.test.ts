@@ -93,11 +93,40 @@ describe('チームで練習', () => {
         authors: ['後輩 田中'],
       }),
     )
-    // 消された側の後輩が次に push しようとすると拒否される
+    // 消された側の後輩は、次の pull でマージして push する。消えたはずのコミットがサーバーに戻ってくる
     const next = runBeat(mine.world, beat('kouhai-feature'), TEAM_ACTORS, now)
     expect(next.failed).toBeNull()
     const env = runBeat(next.world, beat('kouhai-env'), TEAM_ACTORS, now)
-    expect(env.failed?.command).toBe('git pull')
+    expect(env.failed).toBeNull()
+    const lost = (
+      mine.events.find((e) => e.type === 'FORCE_PUSH_OVERWROTE') as {
+        lostCommits: string[]
+      }
+    ).lostCommits
+    const serverLog = run(env.world, me, 'git fetch', 'git log --oneline origin/main')
+    expect(serverLog.stdout).toContain(lost[0]?.slice(0, 7))
+  })
+
+  it('分岐したら pull --no-rebase でマージして push でき、同僚もマージして続けられる', () => {
+    let w = run(
+      buildTeamWorld(now, player),
+      TEAM_PATHS.home,
+      `git clone ${TEAM_PATHS.origin}`,
+    ).world
+    w = runBeat(w, beat('kouhai-readme'), TEAM_ACTORS, now).world
+    const merged = run(
+      w,
+      me,
+      'git commit --allow-empty -m mine',
+      'git pull --no-rebase',
+      'git push',
+      'git log --oneline -1',
+    )
+    expect(merged.stdout).toMatch(/Merge branch 'main' of \/srv\/git\/team-project/)
+    // 先輩は自分の作業の前に pull するので、プレイヤーのマージも取り込んで push できる
+    w = runBeat(merged.world, beat('kouhai-feature'), TEAM_ACTORS, now).world
+    const senpai = runBeat(w, beat('senpai-config'), TEAM_ACTORS, now)
+    expect(senpai.failed).toBeNull()
   })
 
   it('先に push されていると拒否され、PUSH_REJECTED が出る', () => {

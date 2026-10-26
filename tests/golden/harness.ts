@@ -9,6 +9,7 @@ import {
   execute,
   findWorkspace,
   type GitDir,
+  type IndexEntry,
   type World,
   writeFile,
 } from '../../src/engine/index.ts'
@@ -45,18 +46,33 @@ export interface Snapshot {
   commits: string[]
   /** remote.* と branch.* の設定（"key value"） */
   config: string[]
+  /** マージの途中なら MERGE_HEAD のコミット */
+  merge: string
+  /** "mode oid stage	path"（コンフリクト中は stage 1〜3） */
   index: string[]
   worktree: Record<string, string>
   status: string
 }
 
-const SIM_ROOT = '/work'
+// シミュレータ側の作業場所。本物と同じ実際のパスにする（pull のマージメッセージなどにパスが入り、
+// ハッシュ値まで比べるため）。テストごとに expectSameAsRealGit の最初で決まる
+let SIM_ROOT = '/work'
 const simPath = (name: string) => (name === '.' ? SIM_ROOT : `${SIM_ROOT}/${name}`)
 const ctxFor = (name: string): ExecContext => ({
   workspace: simPath(name),
   now: { timestamp: Date.parse(FIXED_DATE) / 1000, tzOffset: 9 * 60 },
   tty: false,
 })
+
+/**
+ * git のバージョンで文言が違う出力を、新しい版の文言にそろえる（シミュレータは新しい版に合わせている）
+ */
+function compatible(text: string): string {
+  return text.replaceAll(
+    '(use "git pull" to merge the remote branch into yours)',
+    '(use "git pull" if you want to integrate the remote branch with yours)',
+  )
+}
 
 /** シミュレータに渡す1行。空白やクォートを含む引数はシングルクォートで囲む */
 export function toCommandLine(args: string[]): string {
@@ -102,20 +118,39 @@ function simSnapshot(world: World, name: string): Snapshot {
       refs,
       commits: commits.sort(),
       config,
+      merge: '',
       index: [],
       worktree: {},
       status: '',
     }
   }
-  const index = Object.entries(git.index)
-    .sort(([a], [b]) => (a < b ? -1 : 1))
-    .map(([path, e]) => `${e.mode} ${e.oid} 0\t${path}`)
+  const index = [
+    ...Object.entries(git.index).map(([path, e]) => ({ path, stage: 0, e })),
+    ...Object.entries(git.unmerged).flatMap(([path, u]) =>
+      ([1, 2, 3] as const)
+        .map((stage) => ({ path, stage, e: [u.base, u.ours, u.theirs][stage - 1] }))
+        .filter((x): x is { path: string; stage: 1 | 2 | 3; e: IndexEntry } => !!x.e),
+    ),
+  ]
+    .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : a.stage - b.stage))
+    .map(({ path, stage, e }) => `${e.mode} ${e.oid} ${stage}\t${path}`)
   const worktree = Object.fromEntries(Object.entries(ws.files).sort(([a], [b]) => (a < b ? -1 : 1)))
   const status = execute(world, 'git status --porcelain', {
     ...ctxFor(name),
     workspace: key,
   }).stdout
-  return { bare: false, head, refs, commits: commits.sort(), config, index, worktree, status }
+  const merge = git.merge?.head ?? ''
+  return {
+    bare: false,
+    head,
+    refs,
+    commits: commits.sort(),
+    config,
+    merge,
+    index,
+    worktree,
+    status,
+  }
 }
 
 /** シミュレータ側で git リポジトリになっているワークスペースの名前 */
@@ -139,6 +174,7 @@ function compareAll(world: World, real: RealGitRepo, label: string): void {
 /** 手順を両方で実行し、終了コード・指定した出力・状態が一致することを確かめる */
 export function expectSameAsRealGit(steps: Step[]): void {
   const real = new RealGitRepo()
+  SIM_ROOT = real.root
   let world = createWorld(
     { [SIM_ROOT]: { path: SIM_ROOT } },
     {
@@ -183,7 +219,7 @@ export function expectSameAsRealGit(steps: Step[]): void {
         ).toBe(expected.exitCode)
         for (const stream of step.compare ?? []) {
           expect(actual[stream], `${where}: ${line}（${name}）の ${stream}`).toBe(
-            real.normalize(expected[stream], SIM_ROOT),
+            compatible(real.normalize(expected[stream], SIM_ROOT)),
           )
         }
       }

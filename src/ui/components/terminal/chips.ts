@@ -27,6 +27,15 @@ export function suggestChips({ git, files, view, servers, clonedChildren }: Chip
   }
   if (git.bare) return [{ command: 'cd ~' }]
 
+  // マージの途中：コンフリクトを直して add → commit、またはやめる
+  if (git.merge) {
+    const conflicted = files.filter((f) => f.worktree === 'conflicted').map((f) => f.path)
+    const chips: Chip[] = conflicted.slice(0, 3).map((p) => ({ command: `git add ${p}` }))
+    if (conflicted.length === 0) chips.push({ command: 'git commit --no-edit' })
+    chips.push({ command: 'git status' }, { command: 'git merge --abort' })
+    return chips
+  }
+
   const chips: Chip[] = [{ command: 'git status' }]
   const hasRemote = Object.keys(git.config).some((k) => /^remote\..+\.url$/.test(k))
 

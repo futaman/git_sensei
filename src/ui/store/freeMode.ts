@@ -128,17 +128,20 @@ export function promptFor(world: World, cwd: string): string {
   const git = ws?.git
   let branch = ''
   if (git && !git.bare) {
-    branch =
+    const where =
       git.head.type === 'symbolic'
-        ? ` (${git.head.ref.replace('refs/heads/', '')})`
-        : ` (${git.head.oid.slice(0, 7)}...)`
+        ? git.head.ref.replace('refs/heads/', '')
+        : `${git.head.oid.slice(0, 7)}...`
+    // マージの途中は git-prompt と同じく |MERGING を付ける
+    branch = ` (${where}${git.merge ? '|MERGING' : ''})`
   }
   return `you@sensei:${shown}${branch}$`
 }
 
 const HELP = [
   '使えるコマンド:',
-  '  git init / add / commit / status / log / branch / switch / checkout / merge',
+  '  git init / add / commit / status / log / branch / switch / checkout',
+  '  git merge（--no-ff / --abort / --continue）',
   '  git clone / remote / fetch / pull / push / config',
   '  cd / pwd / ls / cat',
   '  clear  … ターミナルを消す',
@@ -263,8 +266,8 @@ export const useFreeMode = create<FreeModeState>()(
     }),
     {
       name: 'git-sensei:free-mode',
-      // 2: リモート対応で world の形が変わった。古い保存データは捨てて最初から
-      version: 2,
+      // 3: マージ（コンフリクト）対応で world の形が変わった。古い保存データは捨てて最初から
+      version: 3,
       migrate: () => ({}) as FreeModeState,
       storage: createJSONStorage(() => safeStorage),
       partialize: (s) => ({

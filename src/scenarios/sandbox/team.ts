@@ -32,6 +32,8 @@ const SETUP: NpcBeat = {
     { actor: 'senpai', run: 'git init' },
     { actor: 'senpai', run: "git config user.name '先輩 佐藤'" },
     { actor: 'senpai', run: 'git config user.email senpai@example.com' },
+    // 同僚は、分岐していたらマージで取り込む（プレイヤーが先に push しても作業が止まらないように）
+    { actor: 'senpai', run: 'git config pull.rebase false' },
     { actor: 'senpai', write: ['README.md', README_V1] },
     { actor: 'senpai', write: ['src/app.js', "console.log('team-project')\n"] },
     { actor: 'senpai', run: 'git add .' },
@@ -114,5 +116,6 @@ export function buildTeamWorld(
   w = must(setup.world, `git clone ${TEAM_PATHS.origin}`, '/home/kouhai')
   w = must(w, "git config user.name '後輩 田中'", TEAM_PATHS.kouhai)
   w = must(w, 'git config user.email kouhai@example.com', TEAM_PATHS.kouhai)
+  w = must(w, 'git config pull.rebase false', TEAM_PATHS.kouhai)
   return w
 }

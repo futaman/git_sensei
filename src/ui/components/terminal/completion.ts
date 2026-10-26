@@ -40,7 +40,7 @@ const OPTIONS: Record<string, string[]> = {
   commit: ['--all', '--amend', '--allow-empty', '--message', '--no-edit'],
   fetch: ['--prune'],
   log: ['--all', '--decorate', '--oneline'],
-  merge: ['--ff-only'],
+  merge: ['--ff-only', '--no-ff', '--abort', '--continue', '--no-edit'],
   pull: ['--ff-only', '--rebase', '--no-rebase'],
   push: ['--set-upstream', '--force', '--force-with-lease', '--delete'],
   status: ['--short', '--porcelain', '--branch'],

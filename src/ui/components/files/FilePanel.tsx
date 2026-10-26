@@ -7,6 +7,11 @@ const MARK: Record<
   { text: string; className: string; title: string } | null
 > = {
   clean: null,
+  conflicted: {
+    text: '!',
+    className: 'text-rose-600',
+    title: 'コンフリクト中（印を直して git add すると解消）',
+  },
   untracked: {
     text: 'U',
     className: 'text-emerald-600',

@@ -7,10 +7,16 @@ import type {
   RepoView,
 } from '../../../engine/index.ts'
 
-const WORKTREE_LABEL = { untracked: '未追跡', modified: '変更', deleted: '削除' } as const
+const WORKTREE_LABEL = {
+  untracked: '未追跡',
+  modified: '変更',
+  deleted: '削除',
+  conflicted: 'コンフリクト',
+} as const
 const STAGED_LABEL = { A: '新規', M: '変更', D: '削除' } as const
 const TONE = {
   untracked: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+  conflicted: 'bg-rose-100 text-rose-900 border-rose-300 font-bold',
   modified: 'bg-amber-50 text-amber-800 border-amber-200',
   deleted: 'bg-rose-50 text-rose-800 border-rose-200',
   A: 'bg-emerald-50 text-emerald-800 border-emerald-200',

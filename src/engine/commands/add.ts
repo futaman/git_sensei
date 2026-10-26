@@ -26,8 +26,14 @@ export function add(cmd: Cmd, argv: string[]): void {
   }
 
   const specs = positionals.length > 0 ? positionals : ['.']
-  const candidates = [...new Set([...Object.keys(cmd.ws.files), ...Object.keys(git.index)])]
-    .filter((p) => !update || p in git.index)
+  const candidates = [
+    ...new Set([
+      ...Object.keys(cmd.ws.files),
+      ...Object.keys(git.index),
+      ...Object.keys(git.unmerged),
+    ]),
+  ]
+    .filter((p) => !update || p in git.index || p in git.unmerged)
     .sort()
 
   const matched = new Set<string>()
@@ -41,6 +47,22 @@ export function add(cmd: Cmd, argv: string[]): void {
   const staged: string[] = []
   for (const path of [...matched].sort()) {
     const content = cmd.ws.files[path]
+    const conflict = git.unmerged[path]
+    if (conflict) {
+      // add すると、コンフリクトを解消したことになる（stage 1〜3 を消して stage 0 にする）
+      delete git.unmerged[path]
+      if (content !== undefined) {
+        const mode = (conflict.ours ?? conflict.theirs ?? conflict.base)?.mode ?? '100644'
+        git.index[path] = { oid: writeObject(git, { type: 'blob', content }), mode }
+      }
+      staged.push(path)
+      cmd.events.push({
+        type: 'CONFLICT_RESOLVED',
+        path,
+        remaining: Object.keys(git.unmerged).length,
+      })
+      continue
+    }
     const before = git.index[path]
     if (content === undefined) {
       if (before) {

@@ -23,7 +23,7 @@ export function describeEvent(e: GitEvent): { text: string; tone: Tone } {
       return {
         text: e.amend
           ? `直前のコミットを作り直しました（${short(e.oid)}）。前のコミットとは別物になります`
-          : `コミット ${short(e.oid)} を作りました${e.branch ? `（${e.branch} が進みました）` : '（どのブランチにも属していません）'}`,
+          : `${e.parents.length > 1 ? 'マージコミット' : 'コミット'} ${short(e.oid)} を作りました${e.branch ? `（${e.branch} が進みました）` : '（どのブランチにも属していません）'}`,
         tone: e.branch ? 'good' : 'warn',
       }
     case 'BRANCH_CREATED':
@@ -120,5 +120,36 @@ export function describeEvent(e: GitEvent): { text: string; tone: Tone } {
         text: `${e.branch} と ${e.upstream} が分岐しています。取り込み方（merge / rebase）を選ぶ必要があります`,
         tone: 'warn',
       }
+    case 'MERGED':
+      return {
+        text: `${shortName(e.from)} を ${e.branch ?? 'HEAD'} にマージしました（マージコミット ${short(e.oid)}）`,
+        tone: 'good',
+      }
+    case 'MERGE_CONFLICT':
+      return {
+        text: `${shortName(e.from)} とのマージでコンフリクトしました：${e.files
+          .map((f) => `${f.path}（${CONFLICT_KIND[f.kind]}）`)
+          .join(', ')}。直して git add し、git commit で完了します`,
+        tone: 'danger',
+      }
+    case 'CONFLICT_RESOLVED':
+      return {
+        text:
+          e.remaining === 0
+            ? `${e.path} のコンフリクトを解消しました。すべて解消したので git commit でマージを完了できます`
+            : `${e.path} のコンフリクトを解消しました（残り ${e.remaining} 個）`,
+        tone: e.remaining === 0 ? 'good' : 'normal',
+      }
+    case 'MERGE_ABORTED':
+      return { text: 'マージを中止して、マージ前の状態に戻しました', tone: 'normal' }
   }
 }
+
+const CONFLICT_KIND = {
+  content: '同じ場所を両方が変更',
+  'add/add': '両方が同じ名前で追加',
+  'modify/delete': '片方が削除、もう片方が変更',
+} as const
+
+/** pull のマージではコミットのハッシュ値が来るので、短くする */
+const shortName = (from: string) => (/^[0-9a-f]{40}$/.test(from) ? short(from) : from)

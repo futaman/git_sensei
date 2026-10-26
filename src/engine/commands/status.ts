@@ -3,7 +3,12 @@ import { abbrev } from '../objects/store.ts'
 import { parseArgs } from '../parser/options.ts'
 import { currentBranch, headOid, upstreamOf } from '../refs.ts'
 import { aheadBehind } from '../remote/transfer.ts'
-import { collapseUntracked, computeStatus, type WorktreeStatus } from '../worktree/status.ts'
+import {
+  collapseUntracked,
+  computeStatus,
+  type UnmergedCode,
+  type WorktreeStatus,
+} from '../worktree/status.ts'
 import { type Cmd, fail, requireWorktree } from './context.ts'
 
 export function status(cmd: Cmd, argv: string[]): void {
@@ -80,14 +85,28 @@ export function trackingLines(git: GitDir): string[] {
 }
 
 export function shortStatusLines(git: GitDir, st: WorktreeStatus): string[] {
-  const paths = [...new Set([...st.staged.keys(), ...st.unstaged.keys()])].sort()
-  const lines = paths.map((p) => `${st.staged.get(p) ?? ' '}${st.unstaged.get(p) ?? ' '} ${p}`)
+  const paths = [
+    ...new Set([...st.staged.keys(), ...st.unstaged.keys(), ...st.unmerged.keys()]),
+  ].sort()
+  const lines = paths.map(
+    (p) => `${st.unmerged.get(p) ?? `${st.staged.get(p) ?? ' '}${st.unstaged.get(p) ?? ' '}`} ${p}`,
+  )
   for (const p of collapseUntracked(git, st.untracked)) lines.push(`?? ${p}`)
   return lines
 }
 
 const LABELS = { A: 'new file:', M: 'modified:', D: 'deleted:' } as const
 const label = (kind: keyof typeof LABELS) => LABELS[kind].padEnd(12)
+
+const UNMERGED_LABELS: Record<UnmergedCode, string> = {
+  UU: 'both modified:',
+  AA: 'both added:',
+  UD: 'deleted by them:',
+  DU: 'deleted by us:',
+  AU: 'added by us:',
+  UA: 'added by them:',
+  DD: 'both deleted:',
+}
 
 export function longStatusLines(git: GitDir, st: WorktreeStatus): string[] {
   const lines: string[] = []
@@ -102,16 +121,47 @@ export function longStatusLines(git: GitDir, st: WorktreeStatus): string[] {
     lines.push(`HEAD detached ${at} ${abbrev(git, git.detachedAt ?? (head as string))}`)
   }
   if (!head) lines.push('', 'No commits yet', '')
+  if (git.merge) {
+    lines.push(
+      ...(st.unmerged.size > 0
+        ? [
+            'You have unmerged paths.',
+            '  (fix conflicts and run "git commit")',
+            '  (use "git merge --abort" to abort the merge)',
+          ]
+        : [
+            'All conflicts fixed but you are still merging.',
+            '  (use "git commit" to conclude merge)',
+          ]),
+      '',
+    )
+  }
 
   if (st.staged.size > 0) {
-    lines.push(
-      'Changes to be committed:',
-      head
-        ? '  (use "git restore --staged <file>..." to unstage)'
-        : '  (use "git rm --cached <file>..." to unstage)',
-    )
+    lines.push('Changes to be committed:')
+    // マージの途中は「restore --staged で戻せる」のヒントを出さない（git と同じ）
+    if (!git.merge) {
+      lines.push(
+        head
+          ? '  (use "git restore --staged <file>..." to unstage)'
+          : '  (use "git rm --cached <file>..." to unstage)',
+      )
+    }
     for (const [path, kind] of [...st.staged].sort(([a], [b]) => (a < b ? -1 : 1))) {
       lines.push(`\t${label(kind)}${path}`)
+    }
+    lines.push('')
+  }
+  if (st.unmerged.size > 0) {
+    const withDeletion = [...st.unmerged.values()].some((c) => c.includes('D'))
+    lines.push(
+      'Unmerged paths:',
+      withDeletion
+        ? '  (use "git add/rm <file>..." as appropriate to mark resolution)'
+        : '  (use "git add <file>..." to mark resolution)',
+    )
+    for (const [path, code] of [...st.unmerged].sort(([a], [b]) => (a < b ? -1 : 1))) {
+      lines.push(`\t${UNMERGED_LABELS[code].padEnd(17)}${path}`)
     }
     lines.push('')
   }
@@ -141,7 +191,7 @@ export function longStatusLines(git: GitDir, st: WorktreeStatus): string[] {
 
   if (st.staged.size > 0) {
     // 何かステージされていれば、まとめの行は出ない
-  } else if (st.unstaged.size > 0) {
+  } else if (st.unstaged.size > 0 || st.unmerged.size > 0) {
     lines.push('no changes added to commit (use "git add" and/or "git commit -a")')
   } else if (untracked.length > 0) {
     lines.push('nothing added to commit but untracked files present (use "git add" to track)')

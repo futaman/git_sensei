@@ -5,7 +5,7 @@ import { defaultRemote } from '../remote/connect.ts'
 import { switchErrorLines, switchTrees } from '../worktree/checkout.ts'
 import { type Cmd, exitKeep, fail, requireWorktree, unsupported } from './context.ts'
 import { fetchFrom } from './fetch.ts'
-import { fastForward } from './merge.ts'
+import { fastForward, mergeMessage, refuseWhileMerging, threeWayMerge } from './merge.ts'
 
 const DIVERGED_HINT = [
   'hint: You have divergent branches and need to specify how to reconcile them.',
@@ -35,6 +35,7 @@ export function pull(cmd: Cmd, argv: string[]): void {
   if (!parsed.ok) fail(cmd, parsed.error, 129)
   const { flags, positionals } = parsed.args
   const git = requireWorktree(cmd)
+  refuseWhileMerging(cmd, git)
   const branch = currentBranch(git)
   const [remoteArg, ...branches] = positionals
   if (branches.length > 1) unsupported(cmd, '複数のブランチを一度に pull すること')
@@ -114,7 +115,19 @@ export function pull(cmd: Cmd, argv: string[]): void {
     exitKeep(128)
   }
   if (rebase) unsupported(cmd, 'git pull --rebase')
-  if (merge) unsupported(cmd, 'pull によるマージコミットの作成')
+  if (merge) {
+    // pull のマージは、取ってきたコミットを oid で渡したのと同じ（ラベルも oid になる）
+    const url = remote.url.replace(/\/+$/, '').replace(/\.git$/, '')
+    const result = threeWayMerge(cmd, git, {
+      head,
+      target,
+      label: target,
+      message: mergeMessage(git, target, { url, branch: mergeBranch }),
+    })
+    if (result === 'blocked') exitKeep(2)
+    if (result === 'conflict') exitKeep(1)
+    return
+  }
   cmd.err.push(...DIVERGED_HINT)
   cmd.events.push({
     type: 'PULL_DIVERGED',

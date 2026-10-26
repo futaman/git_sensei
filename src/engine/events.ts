@@ -46,3 +46,15 @@ export type GitEvent =
     }
   /** pull で上流と分岐していて、取り込み方を決めないと進めない */
   | { type: 'PULL_DIVERGED'; branch: string; upstream: string }
+  /** マージコミットを作った（コンフリクトなし） */
+  | { type: 'MERGED'; branch: string | null; from: string; oid: Oid }
+  /** マージがコンフリクトで止まった */
+  | {
+      type: 'MERGE_CONFLICT'
+      branch: string | null
+      from: string
+      files: { path: string; kind: 'content' | 'add/add' | 'modify/delete' }[]
+    }
+  /** git add でコンフリクトを解消した。remaining は残りのファイル数 */
+  | { type: 'CONFLICT_RESOLVED'; path: string; remaining: number }
+  | { type: 'MERGE_ABORTED' }

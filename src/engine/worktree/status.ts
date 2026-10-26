@@ -14,14 +14,29 @@ export interface WorktreeStatus {
   unstaged: Map<FilePath, UnstagedKind>
   /** index にないファイル（そのままのパス） */
   untracked: FilePath[]
+  /** コンフリクト中のファイルと、その種類（UU / AA / UD など、status -s の2文字） */
+  unmerged: Map<FilePath, UnmergedCode>
+}
+
+export type UnmergedCode = 'UU' | 'AA' | 'UD' | 'DU' | 'AU' | 'UA' | 'DD'
+
+export function unmergedCode(git: GitDir, path: FilePath): UnmergedCode {
+  const e = git.unmerged[path] ?? {}
+  const [b, o, t] = [!!e.base, !!e.ours, !!e.theirs]
+  if (o && t) return b ? 'UU' : 'AA'
+  if (o) return b ? 'UD' : 'AU'
+  if (t) return b ? 'DU' : 'UA'
+  return 'DD'
 }
 
 export function computeStatus(git: GitDir, ws: Workspace): WorktreeStatus {
   const head = commitTree(git, headOid(git))
   const staged = new Map<FilePath, StagedKind>()
   const unstaged = new Map<FilePath, UnstagedKind>()
+  const unmerged = new Map(Object.keys(git.unmerged).map((p) => [p, unmergedCode(git, p)]))
 
   for (const path of new Set([...Object.keys(head), ...Object.keys(git.index)])) {
+    if (unmerged.has(path)) continue
     const h = head[path]
     const i = git.index[path]
     if (!h && i) staged.set(path, 'A')
@@ -34,20 +49,25 @@ export function computeStatus(git: GitDir, ws: Workspace): WorktreeStatus {
     else if (hashBlob(content) !== entry.oid) unstaged.set(path, 'M')
   }
   const untracked = Object.keys(ws.files)
-    .filter((p) => !(p in git.index))
+    .filter((p) => !(p in git.index) && !unmerged.has(p))
     .sort()
-  return { head, staged, unstaged, untracked }
+  return { head, staged, unstaged, untracked, unmerged }
 }
 
 export function isClean(st: WorktreeStatus): boolean {
-  return st.staged.size === 0 && st.unstaged.size === 0 && st.untracked.length === 0
+  return (
+    st.staged.size === 0 &&
+    st.unstaged.size === 0 &&
+    st.untracked.length === 0 &&
+    st.unmerged.size === 0
+  )
 }
 
 /**
  * 追跡中のファイルを1つも含まないディレクトリは "dir/" にまとめる（git status の既定の表示）
  */
 export function collapseUntracked(git: GitDir, untracked: FilePath[]): string[] {
-  const tracked = Object.keys(git.index)
+  const tracked = [...Object.keys(git.index), ...Object.keys(git.unmerged)]
   const hasTracked = (dir: string) => tracked.some((p) => p.startsWith(dir))
   const out = new Set<string>()
   for (const path of untracked) {

@@ -9,8 +9,8 @@ import { computeStatus } from './worktree/status.ts'
 
 export interface FileState {
   path: FilePath
-  /** 作業ツリーでの状態（index と比べて） */
-  worktree: 'clean' | 'modified' | 'deleted' | 'untracked'
+  /** 作業ツリーでの状態（index と比べて）。conflicted はマージのコンフリクト中 */
+  worktree: 'clean' | 'modified' | 'deleted' | 'untracked' | 'conflicted'
   /** ステージ済みの変更（HEAD と比べて） */
   staged: 'A' | 'M' | 'D' | null
 }
@@ -27,9 +27,11 @@ export function fileStates(ws: Workspace): FileState[] {
   const paths = new Set([
     ...Object.keys(ws.files),
     ...Object.keys(git.index),
+    ...Object.keys(git.unmerged),
     ...Object.keys(st.head),
   ])
-  return [...paths].sort().map((path) => {
+  return [...paths].sort().map((path): FileState => {
+    if (st.unmerged.has(path)) return { path, worktree: 'conflicted', staged: null }
     const unstaged = st.unstaged.get(path)
     const worktree =
       unstaged === 'M'
@@ -61,6 +63,10 @@ export interface RepoView {
   remoteBranches: { name: string; oid: Oid }[]
   /** ブランチ・リモート追跡ブランチ・HEAD から辿れるコミット。子が必ず親より前に来る（新しい順） */
   commits: CommitNode[]
+  /** マージの途中なら、取り込もうとしているコミット */
+  mergingWith: Oid | null
+  /** コンフリクトが残っているファイル */
+  conflicts: FilePath[]
 }
 
 export function repoView(git: GitDir): RepoView {
@@ -74,12 +80,16 @@ export function repoView(git: GitDir): RepoView {
   const head = headOid(git)
   const starts = [...branches, ...remoteBranches].map((b) => b.oid)
   if (head) starts.push(head)
+  // マージの途中は、取り込もうとしているコミットもグラフに出す
+  if (git.merge) starts.push(git.merge.head)
   return {
     branch: currentBranch(git),
     head,
     branches,
     remoteBranches,
     commits: topoOrder(git, starts),
+    mergingWith: git.merge?.head ?? null,
+    conflicts: Object.keys(git.unmerged).sort(),
   }
 }
 
