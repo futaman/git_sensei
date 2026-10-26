@@ -1,0 +1,6 @@
+# Cloudflare Pages の応答ヘッダー（検証レポート S3）。外部のスクリプト・画像・フォントは使わない。
+# style-src の 'unsafe-inline' は、CodeMirror が実行時に <style> を差し込むため。
+/*
+  Content-Security-Policy: default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
