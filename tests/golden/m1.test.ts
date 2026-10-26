@@ -399,3 +399,31 @@ describe('Object.prototype と同じ名前のファイル・ブランチ', () =>
     ])
   })
 })
+
+describe('pathspec の [ ]', () => {
+  it('文字クラス、否定、範囲、閉じていない [', () => {
+    expectSameAsRealGit([
+      { git: ['init'] },
+      { git: ['add', '['], compare: ['stderr'] },
+      { git: ['add', 'a[b'], compare: ['stderr'] },
+      { write: ['a.txt', 'a\n'] },
+      { write: ['b.txt', 'b\n'] },
+      { write: ['c.md', 'c\n'] },
+      { write: ['x1', '1\n'] },
+      { write: ['x9', '9\n'] },
+      { write: ['a[bc', 'literal\n'] },
+      { write: ['b[x]', 'literal\n'] },
+      { git: ['add', '[ab].txt'] },
+      { check: true },
+      { git: ['add', 'x[[:digit:]]'] },
+      { check: true },
+      { git: ['add', '[!abx]*'] },
+      { check: true },
+      { git: ['add', 'a[b*'], compare: ['stderr'] },
+      { git: ['add', 'a[bc'] },
+      { git: ['add', 'b[x]'] },
+      { git: ['add', '[z-a]'], compare: ['stderr'] },
+      { git: ['status', '--short'], compare: ['stdout'] },
+    ])
+  })
+})

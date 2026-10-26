@@ -1,4 +1,5 @@
 // 本物のgitと比べられない、シミュレータ独自の約束ごと（失敗時の状態、意味イベント、未対応の扱い）。
+import { produce } from 'immer'
 import { describe, expect, it } from 'vitest'
 import { createWorld, type ExecContext, execute, type World, writeFile } from './index.ts'
 
@@ -85,5 +86,69 @@ describe('execute', () => {
     const r = execute(fresh(), 'git status', ctx)
     expect(r.exitCode).toBe(128)
     expect(r.stderr).toContain('not a git repository')
+  })
+
+  it('想定外の例外は throw せず、world を変えずに内部エラーとして返す', () => {
+    const base = run(fresh(), 'git init', 'git add .', 'git commit -m first').world
+    // 存在しないコミットを指すブランチ（壊れた保存データなど）
+    const broken = produce(base, (draft) => {
+      const git = draft.workspaces.me?.git
+      if (git) git.refs['refs/heads/main'] = 'f'.repeat(40)
+    })
+    const r = execute(broken, 'git log', ctx)
+    expect(r.exitCode).toBe(1)
+    expect(r.stderr).toMatch(/^git-sensei: 内部エラーが起きました（.+）\n$/)
+    expect(r.world).toBe(broken)
+    expect(r.events).toEqual([])
+  })
+})
+
+describe('利用者の入力で throw しない', () => {
+  // 決まった種から作る疑似乱数（テストを毎回同じにする）
+  function rng(seed: number) {
+    let s = seed
+    return () => {
+      s = (s * 1_103_515_245 + 12_345) % 2 ** 31
+      return s / 2 ** 31
+    }
+  }
+  const SYMBOLS = [
+    '[',
+    ']',
+    '*',
+    '?',
+    '!',
+    '^',
+    '-',
+    ':',
+    '\\',
+    '/',
+    '.',
+    '~',
+    '@',
+    '{',
+    '}',
+    'a',
+    'あ',
+  ]
+  const SUBS = ['add', 'switch', 'log', 'branch', 'checkout', 'merge', 'commit -m', 'status']
+
+  it('記号だらけの引数でも内部エラーにならない', () => {
+    const base = run(
+      fresh(),
+      'git init',
+      'git add .',
+      'git commit -m first',
+      'git branch feature',
+    ).world
+    const next = rng(42)
+    const pick = <T>(xs: T[]) => xs[Math.floor(next() * xs.length)] as T
+    for (let n = 0; n < 500; n++) {
+      const len = 1 + Math.floor(next() * 6)
+      const arg = Array.from({ length: len }, () => pick(SYMBOLS)).join('')
+      const line = `git ${pick(SUBS)} '${arg}'`
+      const r = execute(base, line, ctx)
+      expect(r.stderr, line).not.toContain('内部エラー')
+    }
   })
 })

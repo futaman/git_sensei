@@ -135,8 +135,20 @@ export function deleteFile(world: World, workspace: string, path: FilePath): Wor
   })
 }
 
-/** 1行のコマンドを実行する。world は書き換えず、新しい world を返す */
+/**
+ * 1行のコマンドを実行する。world は書き換えず、新しい world を返す。
+ * 利用者の入力がどんなものでも throw しない（想定外の例外は、world を変えずに内部エラーとして返す）
+ */
 export function execute(world: World, input: string, ctx: ExecContext): ExecuteResult {
+  try {
+    return executeLine(world, input, ctx)
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e)
+    return finish(world, [], [`git-sensei: 内部エラーが起きました（${detail}）`], 1, [], false)
+  }
+}
+
+function executeLine(world: World, input: string, ctx: ExecContext): ExecuteResult {
   const out: string[] = []
   const err: string[] = []
   const events: GitEvent[] = []
