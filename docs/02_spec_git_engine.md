@@ -161,3 +161,53 @@ M1の時点で、本物のgitと違う点や未対応のもの：
 - `.gitignore` は未対応（M5までに対応する）
 - `log --graph`、範囲指定（`a..b`）、fast-forward できないマージ、エディタでのメッセージ入力は、「このシミュレータではまだ使えません」と表示する
 - エラーメッセージ（標準エラー）の文言は、gitのバージョンで変わるため完全には合わせていない。終了コードは一致させている
+
+### M3（2026-10-26）
+
+対応したコマンド：
+
+- `clone`（空のリポジトリにも対応）
+- `remote`（一覧、`-v`、`add`、`remove`、`get-url`）
+- `fetch`（リモート名、ブランチ指定、`--prune`）
+- `pull`（fast-forward、`--ff-only`、分岐しているときは本物と同じく取り込み方を聞いて止まる）
+- `push`（`-u`、`--force`、`--force-with-lease`、`--delete`、`src:dst`、拒否の判定）
+- `config`（取得、設定、`--global`、`--unset`、`--list`）
+- `init --bare`
+- シェル：`cd`、`pwd`、`ls`、`cat`
+
+既存のコマンドも追跡ブランチに対応させた：
+
+- `status`：上流との差（ahead / behind / diverged / gone）
+- `branch`：`-a`、`-r`、`-u`、`--unset-upstream`、リモート追跡ブランチから作ると上流を自動設定
+- `switch` / `checkout`：手元にないブランチ名を指定すると `origin/<名前>` から作る
+- `log`：`origin/main`・`origin/HEAD` の装飾
+- リビジョン指定：`origin/main`、`origin`、`@{u}`
+
+リモートの扱い：
+
+- リモートは同じ world の中の別ワークスペースとして持つ。サーバー役は bare リポジトリで、URL はそのパス
+- 追跡の設定は、本物と同じく `branch.<名前>.remote` / `branch.<名前>.merge` / `remote.<名前>.url` に持つ
+
+突き合わせテスト（`tests/golden/m3.test.ts`）では、origin.git・npc・me の3つのリポジトリを本物のgitとシミュレータの両方に作り、次がすべてのリポジトリで一致することを確かめている：
+
+- refs（symref を含む）
+- コミット
+- remote / branch の設定
+- index、作業ツリー、status
+- 終了コード
+
+演出向けの意味イベントを追加した：
+
+- `PUSHED`、`PUSH_REJECTED`（理由つき）
+- `FORCE_PUSH_OVERWROTE`（消えたコミットとその作者）
+- `FETCHED`（履歴の書き換えを検出）
+- `PULL_DIVERGED`、`CLONED`、`UPSTREAM_SET` など
+
+NPC の台本は `src/scenarios/npc.ts` で実行する。NPC もプレイヤーと同じエンジンで、自分のクローンにコマンドを打つ。フリーモード「チームで練習」の舞台は `src/scenarios/sandbox/team.ts` にある。
+
+M3の時点で、本物のgitと違う点や未対応のもの：
+
+- 分岐したブランチの取り込み（マージコミット、`pull --rebase`）は未対応。チームで練習すると、ここで行き止まりになる（M5で対応）
+- リモートはローカルのパスだけ。HTTPS・SSH の URL や認証は扱わない
+- push / fetch のタグ、複数リモートの一括操作（`--all`）、`remote rename` / `set-url` は未対応
+- 分岐しているときの `status` のヒント文は、git のバージョンによって文言が違うため、新しい方の文言に合わせている

@@ -11,7 +11,7 @@ const CAPTION_H = 44
 
 interface Label {
   text: string
-  kind: 'head' | 'current' | 'branch'
+  kind: 'head' | 'current' | 'branch' | 'remote'
 }
 
 function labelsByCommit(view: RepoView): Map<string, Label[]> {
@@ -26,6 +26,8 @@ function labelsByCommit(view: RepoView): Map<string, Label[]> {
         : { text: b.name, kind: 'branch' },
     )
   }
+  // origin/main など：最後に fetch したときに、リモートのブランチがどこを指していたか
+  for (const r of view.remoteBranches) push(r.oid, { text: r.name, kind: 'remote' })
   return map
 }
 
@@ -40,6 +42,7 @@ const LABEL_STYLE: Record<Label['kind'], string> = {
   head: 'fill-rose-500',
   current: 'fill-emerald-600',
   branch: 'fill-sky-600',
+  remote: 'fill-violet-500',
 }
 
 export function CommitGraph({ view }: { view: RepoView | null }) {

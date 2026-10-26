@@ -1,9 +1,10 @@
 import type { GitDir } from '../model/types.ts'
 import { abbrev } from '../objects/store.ts'
 import { parseArgs } from '../parser/options.ts'
-import { currentBranch, headOid } from '../refs.ts'
+import { currentBranch, headOid, upstreamOf } from '../refs.ts'
+import { aheadBehind } from '../remote/transfer.ts'
 import { collapseUntracked, computeStatus, type WorktreeStatus } from '../worktree/status.ts'
-import { type Cmd, fail, requireRepo } from './context.ts'
+import { type Cmd, fail, requireWorktree } from './context.ts'
 
 export function status(cmd: Cmd, argv: string[]): void {
   const parsed = parseArgs(argv, [
@@ -14,7 +15,7 @@ export function status(cmd: Cmd, argv: string[]): void {
   if (!parsed.ok) fail(cmd, parsed.error, 129)
   const { flags, positionals } = parsed.args
   if (positionals.length > 0) fail(cmd, 'git-sensei: git status のパス指定には未対応です', 1)
-  const git = requireRepo(cmd)
+  const git = requireWorktree(cmd)
   const st = computeStatus(git, cmd.ws)
 
   if (flags.has('short') || flags.has('porcelain')) {
@@ -28,7 +29,54 @@ export function status(cmd: Cmd, argv: string[]): void {
 function branchHeaderShort(git: GitDir): string {
   const branch = currentBranch(git)
   if (branch === null) return 'HEAD (no branch)'
-  return headOid(git) ? branch : `No commits yet on ${branch}`
+  const head = headOid(git)
+  if (!head) return `No commits yet on ${branch}`
+  const upstream = upstreamOf(git, branch)
+  if (!upstream) return branch
+  const theirs = git.refs[upstream.tracking]
+  if (!theirs) return `${branch}...${upstream.name} [gone]`
+  const { ahead, behind } = aheadBehind(git, head, theirs)
+  const parts = [ahead > 0 ? `ahead ${ahead}` : '', behind > 0 ? `behind ${behind}` : ''].filter(
+    Boolean,
+  )
+  return `${branch}...${upstream.name}${parts.length > 0 ? ` [${parts.join(', ')}]` : ''}`
+}
+
+const commits = (n: number) => `${n} commit${n === 1 ? '' : 's'}`
+
+/** "Your branch is ahead of 'origin/main' by 1 commit." など。上流がなければ空 */
+export function trackingLines(git: GitDir): string[] {
+  const branch = currentBranch(git)
+  const head = headOid(git)
+  if (branch === null || head === null) return []
+  const upstream = upstreamOf(git, branch)
+  if (!upstream) return []
+  const theirs = git.refs[upstream.tracking]
+  if (!theirs) {
+    return [
+      `Your branch is based on '${upstream.name}', but the upstream is gone.`,
+      '  (use "git branch --unset-upstream" to fixup)',
+    ]
+  }
+  const { ahead, behind } = aheadBehind(git, head, theirs)
+  if (ahead === 0 && behind === 0) return [`Your branch is up to date with '${upstream.name}'.`]
+  if (behind === 0) {
+    return [
+      `Your branch is ahead of '${upstream.name}' by ${commits(ahead)}.`,
+      '  (use "git push" to publish your local commits)',
+    ]
+  }
+  if (ahead === 0) {
+    return [
+      `Your branch is behind '${upstream.name}' by ${commits(behind)}, and can be fast-forwarded.`,
+      '  (use "git pull" to update your local branch)',
+    ]
+  }
+  return [
+    `Your branch and '${upstream.name}' have diverged,`,
+    `and have ${ahead} and ${behind} different commits each, respectively.`,
+    '  (use "git pull" if you want to integrate the remote branch with yours)',
+  ]
 }
 
 export function shortStatusLines(git: GitDir, st: WorktreeStatus): string[] {
@@ -47,6 +95,8 @@ export function longStatusLines(git: GitDir, st: WorktreeStatus): string[] {
   const head = headOid(git)
   if (branch !== null) {
     lines.push(`On branch ${branch}`)
+    const tracking = trackingLines(git)
+    if (tracking.length > 0) lines.push(...tracking, '')
   } else {
     const at = git.detachedAt === head ? 'at' : 'from'
     lines.push(`HEAD detached ${at} ${abbrev(git, git.detachedAt ?? (head as string))}`)

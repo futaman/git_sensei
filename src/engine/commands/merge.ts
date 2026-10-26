@@ -1,9 +1,10 @@
 import { diffstat, diffTrees, modeLines } from '../diff/treeDiff.ts'
+import type { GitDir, Oid } from '../model/types.ts'
 import { abbrev, commitTree, isAncestor } from '../objects/store.ts'
 import { parseArgs } from '../parser/options.ts'
 import { currentBranch, headOid, resolveRevision } from '../refs.ts'
 import { switchErrorLines, switchTrees } from '../worktree/checkout.ts'
-import { abort, type Cmd, fail, requireRepo, unsupported } from './context.ts'
+import { abort, type Cmd, fail, requireWorktree, unsupported } from './context.ts'
 
 export function merge(cmd: Cmd, argv: string[]): void {
   const parsed = parseArgs(argv, [
@@ -15,7 +16,7 @@ export function merge(cmd: Cmd, argv: string[]): void {
   ])
   if (!parsed.ok) fail(cmd, parsed.error, 129)
   const { flags, positionals } = parsed.args
-  const git = requireRepo(cmd)
+  const git = requireWorktree(cmd)
   if (flags.has('abort')) unsupported(cmd, 'git merge --abort')
   if (flags.has('no-ff')) unsupported(cmd, 'git merge --no-ff（マージコミットの作成）')
   if (positionals.length === 0) fail(cmd, 'fatal: No remote for the current branch.')
@@ -36,13 +37,21 @@ export function merge(cmd: Cmd, argv: string[]): void {
     unsupported(cmd, 'fast-forward できないマージ（マージコミットの作成）')
   }
 
+  if (!fastForward(cmd, git, head, target)) abort(1)
+}
+
+/**
+ * HEAD を target まで早送りする（merge と pull が使う）。
+ * 手元の変更が上書きされるなら何も変えずに false を返す（エラー文は出力済み）
+ */
+export function fastForward(cmd: Cmd, git: GitDir, head: Oid, target: Oid): boolean {
   cmd.out.push(`Updating ${abbrev(git, head)}..${abbrev(git, target)}`)
   const from = commitTree(git, head)
   const to = commitTree(git, target)
   const result = switchTrees(git, cmd.ws, from, to)
   if (!result.ok) {
     cmd.err.push(...switchErrorLines(result, 'merge'))
-    abort(1)
+    return false
   }
   if (git.head.type === 'symbolic') git.refs[git.head.ref] = target
   else git.head = { type: 'detached', oid: target }
@@ -50,4 +59,5 @@ export function merge(cmd: Cmd, argv: string[]): void {
   const changes = diffTrees(git, from, to)
   cmd.out.push('Fast-forward', ...diffstat(changes), ...modeLines(changes))
   cmd.events.push({ type: 'FAST_FORWARDED', branch: currentBranch(git), from: head, to: target })
+  return true
 }

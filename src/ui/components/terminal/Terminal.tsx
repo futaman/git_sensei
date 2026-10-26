@@ -1,6 +1,6 @@
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
-import { completionNames, fileStates, repoView } from '../../../engine/index.ts'
-import { promptFor, type TerminalLine, useFreeMode, WS } from '../../store/freeMode.ts'
+import { completionNames, fileStates, repoView, serverPaths } from '../../../engine/index.ts'
+import { promptFor, type TerminalLine, useFreeMode } from '../../store/freeMode.ts'
 import { suggestChips } from './chips.ts'
 import { complete } from './completion.ts'
 
@@ -20,6 +20,8 @@ function lineClass(line: TerminalLine): string {
       return 'text-amber-300'
     case 'info':
       return 'text-sky-300'
+    case 'npc':
+      return 'text-violet-300'
   }
 }
 
@@ -27,6 +29,7 @@ export function Terminal() {
   const lines = useFreeMode((s) => s.lines)
   const history = useFreeMode((s) => s.history)
   const world = useFreeMode((s) => s.world)
+  const cwd = useFreeMode((s) => s.cwd)
   const run = useFreeMode((s) => s.run)
 
   const [input, setInput] = useState('')
@@ -35,11 +38,21 @@ export function Terminal() {
   const inputRef = useRef<HTMLInputElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
-  const ws = world.workspaces[WS]
+  const ws = world.workspaces[cwd]
   const chips = useMemo(() => {
     if (!ws) return []
-    return suggestChips(!!ws.git, fileStates(ws), ws.git ? repoView(ws.git) : null)
-  }, [ws])
+    const children = Object.values(world.workspaces)
+      .filter((w) => w.git && !w.git.bare && w.path.startsWith(`${ws.path}/`))
+      .map((w) => w.path.slice(ws.path.length + 1))
+      .filter((rel) => !rel.includes('/'))
+    return suggestChips({
+      git: ws.git,
+      files: fileStates(ws),
+      view: ws.git && !ws.git.bare ? repoView(ws.git) : null,
+      servers: serverPaths(world),
+      clonedChildren: children,
+    })
+  }, [ws, world])
 
   // 出力や補完候補が増えたら最下部までスクロールする（依存は「増えた」きっかけとして使う）
   // biome-ignore lint/correctness/useExhaustiveDependencies: 上のとおり
@@ -91,10 +104,11 @@ export function Terminal() {
   const applyChip = (command: string, cursorBack = 0) => {
     setInput(command)
     setCandidates([])
+    // すぐ入力欄に戻す（ボタンにフォーカスが残ると、続けて押した Enter がボタンに行ってしまう）
+    inputRef.current?.focus()
     requestAnimationFrame(() => {
       const el = inputRef.current
       if (!el) return
-      el.focus()
       const pos = command.length - cursorBack
       el.setSelectionRange(pos, pos)
     })
@@ -119,7 +133,7 @@ export function Terminal() {
         ))}
         <div className="flex items-center">
           <label htmlFor="terminal-input" className="mr-2 shrink-0 text-emerald-400">
-            {promptFor(world)}
+            {promptFor(world, cwd)}
           </label>
           <input
             id="terminal-input"

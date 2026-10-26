@@ -1,7 +1,7 @@
 import { writeObject } from '../objects/store.ts'
 import { parseArgs } from '../parser/options.ts'
 import { pathspecMatcher } from '../worktree/pathspec.ts'
-import { type Cmd, fail, requireRepo } from './context.ts'
+import { type Cmd, fail, requireWorktree } from './context.ts'
 
 export function add(cmd: Cmd, argv: string[]): void {
   const parsed = parseArgs(argv, [
@@ -10,7 +10,7 @@ export function add(cmd: Cmd, argv: string[]): void {
   ])
   if (!parsed.ok) fail(cmd, parsed.error, 129)
   const { flags, positionals } = parsed.args
-  const git = requireRepo(cmd)
+  const git = requireWorktree(cmd)
   const all = flags.has('all')
   const update = flags.has('update')
   if (all && update) fail(cmd, "fatal: options '-A' and '-u' cannot be used together")

@@ -16,7 +16,7 @@ const MARK: Record<
   deleted: { text: 'D', className: 'text-rose-600', title: '削除した（まだステージしていない）' },
 }
 
-export function FilePanel({ files }: { files: FileState[] }) {
+export function FilePanel({ files, folder }: { files: FileState[]; folder: string }) {
   const selected = useFreeMode((s) => s.selectedFile)
   const select = useFreeMode((s) => s.selectFile)
   const createFile = useFreeMode((s) => s.createFile)
@@ -49,7 +49,9 @@ export function FilePanel({ files }: { files: FileState[] }) {
   return (
     <div className="flex min-h-0 flex-col">
       <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2">
-        <h2 className="text-xs font-bold text-slate-700">ファイル</h2>
+        <h2 className="min-w-0 truncate text-xs font-bold text-slate-700" title={folder}>
+          ファイル <span className="font-mono font-normal text-slate-400">{folder}</span>
+        </h2>
         <button
           type="button"
           onClick={() => {
@@ -77,6 +79,11 @@ export function FilePanel({ files }: { files: FileState[] }) {
           />
           {error && <p className="mt-1 text-xs text-rose-600">{error}</p>}
         </form>
+      )}
+      {files.length === 0 && (
+        <p className="px-3 py-2 text-xs text-slate-400">
+          このフォルダにはファイルがありません（ls で中身、cd で移動）
+        </p>
       )}
       <ul className="min-h-0 flex-1 overflow-y-auto py-1">
         {files.map((f) => {

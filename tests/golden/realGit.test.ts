@@ -22,13 +22,13 @@ describe('RealGitRepo', () => {
   })
 
   it('作者・日時を固定すると、コミットのハッシュがいつも同じになる', () => {
-    const a = repo().run(firstCommit).git('rev-parse', 'HEAD')
-    const b = repo().run(firstCommit).git('rev-parse', 'HEAD')
+    const a = repo().run(firstCommit).git(['rev-parse', 'HEAD'])
+    const b = repo().run(firstCommit).git(['rev-parse', 'HEAD'])
     expect(a).toBe(b)
     expect(a).toMatch(/^[0-9a-f]{40}$/)
   })
 
   it('既定のブランチは main になる', () => {
-    expect(repo().run(firstCommit).git('branch', '--show-current')).toBe('main')
+    expect(repo().run(firstCommit).git(['branch', '--show-current'])).toBe('main')
   })
 })

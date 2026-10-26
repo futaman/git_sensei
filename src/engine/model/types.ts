@@ -55,8 +55,12 @@ export interface IndexEntry {
 export type Head = { type: 'symbolic'; ref: RefName } | { type: 'detached'; oid: Oid }
 
 export interface GitDir {
+  /** 作業ツリーを持たないリポジトリ（サーバー側の origin など） */
+  bare: boolean
   objects: Record<Oid, GitObject>
   refs: Record<RefName, Oid>
+  /** 別の ref を指す ref（refs/remotes/origin/HEAD → refs/remotes/origin/main） */
+  symrefs: Record<RefName, RefName>
   head: Head
   index: Record<FilePath, IndexEntry>
   config: Record<string, string>
@@ -76,6 +80,7 @@ export interface Workspace {
 }
 
 export interface World {
+  /** ディレクトリごとのワークスペース。キーは任意だが、clone で作ったものはパスがキーになる */
   workspaces: Record<string, Workspace>
   /** git config --global 相当 */
   globalConfig: Record<string, string>
@@ -88,4 +93,6 @@ export interface ExecContext {
   now: { timestamp: number; tzOffset: number }
   /** 端末に表示する出力か（本物のgitと同じく、log の装飾などが変わる） */
   tty: boolean
+  /** cd ~ の行き先 */
+  home?: string
 }

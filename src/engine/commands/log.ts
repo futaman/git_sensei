@@ -2,7 +2,7 @@ import { formatGitDate } from '../format/date.ts'
 import type { GitDir, Oid } from '../model/types.ts'
 import { abbrev, readCommit } from '../objects/store.ts'
 import { parseArgs } from '../parser/options.ts'
-import { currentBranch, HEADS, headOid, resolveRevision } from '../refs.ts'
+import { currentBranch, HEADS, headOid, REMOTES, readRef, resolveRevision } from '../refs.ts'
 import { subjectOf } from './commit.ts'
 import { type Cmd, fail, requireRepo, unsupported } from './context.ts'
 
@@ -40,7 +40,11 @@ export function log(cmd: Cmd, argv: string[]): void {
     starts.push(oid)
   }
   if (flags.has('all')) {
-    starts.push(...Object.values(git.refs))
+    // git と同じく、ref を名前順に並べてから最後に HEAD（同じ日時のコミットの順序に効く）
+    for (const ref of [...Object.keys(git.refs), ...Object.keys(git.symrefs)].sort()) {
+      const oid = readRef(git, ref)
+      if (oid) starts.push(oid)
+    }
     const head = headOid(git)
     if (head) starts.push(head)
   }
@@ -116,10 +120,15 @@ export function decorations(git: GitDir): Map<Oid, string> {
     byOid.set(oid, [name, ...(byOid.get(oid) ?? [])])
   }
   const branch = currentBranch(git)
-  for (const ref of Object.keys(git.refs).sort()) {
-    if (!ref.startsWith(HEADS)) continue
-    const name = ref.slice(HEADS.length)
-    if (name !== branch) prepend(git.refs[ref] as Oid, name)
+  for (const ref of [...Object.keys(git.refs), ...Object.keys(git.symrefs)].sort()) {
+    const oid = readRef(git, ref)
+    if (!oid) continue
+    if (ref.startsWith(HEADS)) {
+      const name = ref.slice(HEADS.length)
+      if (name !== branch) prepend(oid, name)
+    } else if (ref.startsWith(REMOTES)) {
+      prepend(oid, ref.slice(REMOTES.length))
+    }
   }
   const head = headOid(git)
   if (head) prepend(head, branch !== null ? `HEAD -> ${branch}` : 'HEAD')

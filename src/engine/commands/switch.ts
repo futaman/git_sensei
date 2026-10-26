@@ -1,13 +1,23 @@
 // git switch / git checkout（ブランチの切り替え部分）。
 
+import type { HeadPosition } from '../events.ts'
 import type { GitDir, Oid } from '../model/types.ts'
 import { abbrev, ancestors, commitTree, readCommit } from '../objects/store.ts'
 import { parseArgs } from '../parser/options.ts'
-import { branchRef, currentBranch, headOid, headPosition, resolveRevision } from '../refs.ts'
+import {
+  branchRef,
+  currentBranch,
+  headOid,
+  headPosition,
+  listRemotes,
+  REMOTES,
+  resolveRevision,
+} from '../refs.ts'
 import { localChangeLines, switchErrorLines, switchTrees } from '../worktree/checkout.ts'
 import { createBranch } from './branch.ts'
 import { subjectOf } from './commit.ts'
-import { abort, type Cmd, fail, requireRepo, unsupported } from './context.ts'
+import { abort, type Cmd, fail, requireWorktree, unsupported } from './context.ts'
+import { trackingLines } from './status.ts'
 
 type Destination = { branch: string; created?: boolean } | { detach: Oid; spec: string }
 
@@ -19,7 +29,7 @@ export function switchCmd(cmd: Cmd, argv: string[]): void {
   ])
   if (!parsed.ok) fail(cmd, parsed.error, 129)
   const { flags, values, positionals } = parsed.args
-  const git = requireRepo(cmd)
+  const git = requireWorktree(cmd)
 
   const create = values.get('create')?.[0] ?? values.get('force-create')?.[0]
   if (create !== undefined) {
@@ -39,6 +49,11 @@ export function switchCmd(cmd: Cmd, argv: string[]): void {
   const name = resolvePrevious(cmd, git, positionals[0] as string)
   if (branchRef(name) in git.refs) {
     moveHead(cmd, git, { branch: name })
+    return
+  }
+  const guess = guessRemoteBranch(git, name)
+  if (guess) {
+    startNewBranch(cmd, git, name, guess, false)
     return
   }
   if (resolveRevision(git, name)) {
@@ -61,7 +76,7 @@ export function checkoutCmd(cmd: Cmd, argv: string[]): void {
   ])
   if (!parsed.ok) fail(cmd, parsed.error, 129)
   const { flags, values, positionals } = parsed.args
-  const git = requireRepo(cmd)
+  const git = requireWorktree(cmd)
   if (argv.includes('--')) unsupported(cmd, 'git checkout -- <file>（ファイルの復元）')
 
   const create = values.get('branch')?.[0] ?? values.get('force-branch')?.[0]
@@ -78,6 +93,11 @@ export function checkoutCmd(cmd: Cmd, argv: string[]): void {
     moveHead(cmd, git, { branch: spec })
     return
   }
+  const guess = flags.has('detach') ? null : guessRemoteBranch(git, spec)
+  if (guess && !resolveRevision(git, spec)) {
+    startNewBranch(cmd, git, spec, guess, false)
+    return
+  }
   const oid = resolveRevision(git, spec)
   if (oid) {
     moveHead(cmd, git, { detach: oid, spec })
@@ -87,6 +107,15 @@ export function checkoutCmd(cmd: Cmd, argv: string[]): void {
     unsupported(cmd, 'git checkout <file>（ファイルの復元）')
   }
   fail(cmd, `error: pathspec '${spec}' did not match any file(s) known to git`, 1)
+}
+
+/**
+ * 手元にないブランチ名でも、ちょうど1つのリモートにあれば 'origin/<name>' を返す
+ * （git switch feature で origin/feature を追跡するブランチが作られる）
+ */
+function guessRemoteBranch(git: GitDir, name: string): string | null {
+  const hits = listRemotes(git).filter((r) => `${REMOTES}${r}/${name}` in git.refs)
+  return hits.length === 1 ? `${hits[0]}/${name}` : null
 }
 
 function resolvePrevious(cmd: Cmd, git: GitDir, name: string): string {
@@ -112,17 +141,26 @@ function startNewBranch(
     cmd.events.push({ type: 'HEAD_MOVED', from, to: headPosition(git) })
     return
   }
+  // まだコミットのないブランチ main にいて main を作る場合、作った瞬間に HEAD も動いてしまうので、
+  // 作る前の位置を覚えておく
+  const before = { oid: headOid(git), position: headPosition(git) }
   createBranch(cmd, git, name, start, force)
-  moveHead(cmd, git, { branch: name, created: true })
+  moveHead(cmd, git, { branch: name, created: true }, before)
 }
 
-export function moveHead(cmd: Cmd, git: GitDir, dest: Destination): void {
+export function moveHead(
+  cmd: Cmd,
+  git: GitDir,
+  dest: Destination,
+  before?: { oid: Oid | null; position: HeadPosition },
+): void {
   const fromBranch = currentBranch(git)
-  const fromOid = headOid(git)
-  const from = headPosition(git)
+  const fromOid = before ? before.oid : headOid(git)
+  const from = before ? before.position : headPosition(git)
 
   if ('branch' in dest && dest.branch === fromBranch && !dest.created) {
     cmd.err.push(`Already on '${dest.branch}'`)
+    cmd.out.push(...trackingLines(git))
     return
   }
   const toOid = 'branch' in dest ? (git.refs[branchRef(dest.branch)] ?? null) : dest.detach
@@ -177,6 +215,8 @@ export function moveHead(cmd: Cmd, git: GitDir, dest: Destination): void {
         ? `Switched to a new branch '${dest.branch}'`
         : `Switched to branch '${dest.branch}'`,
     )
+    // 既存のブランチに上流があれば、どれだけ進んでいる・遅れているかを伝える
+    if (!dest.created) cmd.out.push(...trackingLines(git))
   } else {
     if (fromBranch !== null) cmd.err.push(...detachedAdvice(dest.spec))
     cmd.err.push(`HEAD is now at ${describe(git, dest.detach)}`)

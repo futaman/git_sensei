@@ -12,7 +12,7 @@ import {
 import { parseArgs } from '../parser/options.ts'
 import { currentBranch, headOid } from '../refs.ts'
 import { computeStatus } from '../worktree/status.ts'
-import { type Cmd, configValue, exitKeep, fail, requireRepo, unsupported } from './context.ts'
+import { type Cmd, configValue, exitKeep, fail, requireWorktree, unsupported } from './context.ts'
 import { longStatusLines } from './status.ts'
 
 /** -m のメッセージの整形（git の cleanup=whitespace 相当） */
@@ -44,7 +44,7 @@ export function commit(cmd: Cmd, argv: string[]): void {
   ])
   if (!parsed.ok) fail(cmd, parsed.error, 129)
   const { flags, values, positionals } = parsed.args
-  const git = requireRepo(cmd)
+  const git = requireWorktree(cmd)
   if (positionals.length > 0) fail(cmd, 'git-sensei: git commit のパス指定には未対応です', 1)
 
   const messages = values.get('message')

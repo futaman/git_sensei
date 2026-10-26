@@ -71,7 +71,7 @@ describe('execute', () => {
       exitCode: 1,
       unsupported: true,
     })
-    expect(execute(base.world, 'ls -la', ctx).unsupported).toBe(true)
+    expect(execute(base.world, 'rm -rf build', ctx).unsupported).toBe(true)
     expect(execute(base.world, 'git commit', ctx).unsupported).toBe(true)
   })
 

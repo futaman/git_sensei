@@ -1,6 +1,11 @@
 // 4領域ビュー：作業ツリー → ステージ → ローカルリポジトリ → リモート（docs/03 §2.1）
 import type { ReactNode } from 'react'
-import type { FileState, RepoView } from '../../../engine/index.ts'
+import type {
+  FileState,
+  RemoteBranchState,
+  RemoteSummary,
+  RepoView,
+} from '../../../engine/index.ts'
 
 const WORKTREE_LABEL = { untracked: '未追跡', modified: '変更', deleted: '削除' } as const
 const STAGED_LABEL = { A: '新規', M: '変更', D: '削除' } as const
@@ -53,10 +58,12 @@ export function FourAreas({
   hasRepo,
   files,
   view,
+  remotes,
 }: {
   hasRepo: boolean
   files: FileState[]
   view: RepoView | null
+  remotes: RemoteSummary[]
 }) {
   const changed = files.filter((f) => f.worktree !== 'clean')
   const clean = files.length - changed.length
@@ -81,7 +88,7 @@ export function FourAreas({
       </Area>
       <Arrow command="add" />
       <Area title="ステージ" hint="次のコミットに入る変更">
-        {!hasRepo && <Muted>git init で使えるようになります</Muted>}
+        {!hasRepo && <Muted>git init か git clone で使えるようになります</Muted>}
         <ul className="space-y-1">
           {staged.map((f) => (
             <Pill
@@ -132,9 +139,90 @@ export function FourAreas({
         )}
       </Area>
       <Arrow command="push" />
-      <Area title="リモート" hint="GitHub など">
-        <Muted>まだありません（M3 で clone / push / pull に対応）</Muted>
+      <Area title="リモート" hint="サーバー（GitHub など）">
+        {remotes.length === 0 && (
+          <Muted>
+            {hasRepo
+              ? 'まだありません（git remote add か git clone で登録されます）'
+              : 'git clone すると、クローン元がここに出ます'}
+          </Muted>
+        )}
+        {remotes.map((r) => (
+          <div key={r.name} className="mb-2 text-xs">
+            <p className="truncate">
+              <span className="font-mono font-bold text-violet-700">{r.name}</span>{' '}
+              <span className="font-mono text-[10px] text-slate-400">{r.url}</span>
+            </p>
+            {r.missing && <p className="text-rose-600">接続先にリポジトリがありません</p>}
+            <ul className="mt-1 space-y-1">
+              {r.branches.map((b) => (
+                <li key={b.name} className="flex items-center justify-between gap-2">
+                  <span className="truncate font-mono">{b.name}</span>
+                  <RemoteBadge state={b} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
       </Area>
     </div>
   )
+}
+
+function RemoteBadge({ state }: { state: RemoteBranchState }) {
+  const badge = (text: string, cls: string, title: string) => (
+    <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${cls}`} title={title}>
+      {text}
+    </span>
+  )
+  if (state.actual === null) {
+    return badge(
+      'サーバーで削除済み',
+      'bg-slate-100 text-slate-600',
+      'git fetch --prune で手元の origin/〜 も片付きます',
+    )
+  }
+  if (state.known === null) {
+    return badge(
+      'まだ取ってきていない',
+      'bg-amber-50 text-amber-800',
+      'git fetch すると見えるようになります',
+    )
+  }
+  if (state.actual !== state.known) {
+    return badge(
+      'サーバーに新しい更新',
+      'bg-amber-50 text-amber-800',
+      '最後に fetch した後で、誰かが push しています。git fetch か git pull で取ってきましょう',
+    )
+  }
+  if (state.ahead > 0 && state.behind > 0) {
+    return badge(
+      `分岐（+${state.ahead} / -${state.behind}）`,
+      'bg-rose-50 text-rose-800',
+      '手元とリモートの両方に、相手にないコミットがあります',
+    )
+  }
+  if (state.ahead > 0) {
+    return badge(
+      `push 待ち ${state.ahead}`,
+      'bg-sky-50 text-sky-800',
+      'まだ push していないコミットがあります',
+    )
+  }
+  if (state.behind > 0) {
+    return badge(
+      `取り込み待ち ${state.behind}`,
+      'bg-amber-50 text-amber-800',
+      'git pull（または merge）で手元のブランチに取り込めます',
+    )
+  }
+  if (state.local === null) {
+    return badge(
+      '手元にブランチなし',
+      'bg-slate-100 text-slate-600',
+      `git switch ${state.name} で手元にブランチを作れます`,
+    )
+  }
+  return badge('最新', 'bg-emerald-50 text-emerald-800', '手元のブランチとサーバーが一致しています')
 }

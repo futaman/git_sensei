@@ -1,5 +1,5 @@
 // 補助チップ（docs/03 §1.2）。押すと入力欄にコマンドが入るだけで、実行はしない。
-import type { FileState, RepoView } from '../../../engine/index.ts'
+import type { FileState, GitDir, RepoView } from '../../../engine/index.ts'
 
 export interface Chip {
   command: string
@@ -7,9 +7,28 @@ export interface Chip {
   cursorBack?: number
 }
 
-export function suggestChips(hasRepo: boolean, files: FileState[], view: RepoView | null): Chip[] {
-  if (!hasRepo) return [{ command: 'git init' }]
+export interface ChipContext {
+  git: GitDir | null
+  files: FileState[]
+  view: RepoView | null
+  /** world にあるサーバー（bare リポジトリ）のパス */
+  servers: string[]
+  /** いまのフォルダの直下にあるリポジトリ（clone したもの） */
+  clonedChildren: string[]
+}
+
+export function suggestChips({ git, files, view, servers, clonedChildren }: ChipContext): Chip[] {
+  if (!git) {
+    // リポジトリの外：clone 済みなら入る、まだならクローンか init
+    const chips: Chip[] = clonedChildren.map((dir) => ({ command: `cd ${dir}` }))
+    if (chips.length === 0) for (const s of servers) chips.push({ command: `git clone ${s}` })
+    chips.push({ command: 'git init' })
+    return chips.slice(0, 7)
+  }
+  if (git.bare) return [{ command: 'cd ~' }]
+
   const chips: Chip[] = [{ command: 'git status' }]
+  const hasRemote = Object.keys(git.config).some((k) => /^remote\..+\.url$/.test(k))
 
   const changed = files.filter((f) => f.worktree !== 'clean')
   if (changed.length > 0) {
@@ -19,12 +38,14 @@ export function suggestChips(hasRepo: boolean, files: FileState[], view: RepoVie
   if (files.some((f) => f.staged !== null))
     chips.push({ command: 'git commit -m ""', cursorBack: 1 })
 
+  if (hasRemote)
+    chips.push({ command: 'git pull' }, { command: 'git push' }, { command: 'git fetch' })
   if (view && view.commits.length > 0) {
-    chips.push({ command: 'git log --oneline' })
+    chips.push({ command: 'git log --oneline --all' })
     chips.push({ command: 'git switch -c ' })
     for (const b of view.branches) {
       if (b.name !== view.branch) chips.push({ command: `git switch ${b.name}` })
     }
   }
-  return chips.slice(0, 7)
+  return chips.slice(0, 9)
 }

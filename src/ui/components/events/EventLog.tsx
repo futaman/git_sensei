@@ -21,10 +21,13 @@ export function EventLog() {
             gitコマンドを実行すると、ここに何が起きたかが出ます
           </li>
         )}
-        {[...events].reverse().map(({ id, event, command }) => {
+        {[...events].reverse().map(({ id, actor, event, command }) => {
           const { text, tone } = describeEvent(event)
           return (
             <li key={id} className={`rounded border px-2 py-1.5 text-xs ${TONE[tone]}`}>
+              {actor && (
+                <p className="mb-0.5 text-[10px] font-bold text-violet-700">{actor} の作業</p>
+              )}
               <p>{text}</p>
               <p className="mt-0.5 truncate font-mono text-[10px] opacity-60">$ {command}</p>
             </li>

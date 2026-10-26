@@ -4,19 +4,28 @@
 import { produce } from 'immer'
 import { add } from './commands/add.ts'
 import { branch } from './commands/branch.ts'
+import { clone } from './commands/clone.ts'
 import { commit } from './commands/commit.ts'
+import { config } from './commands/config.ts'
 import { type Cmd, type CommandResult, Exit, unsupported } from './commands/context.ts'
+import { fetch } from './commands/fetch.ts'
 import { init } from './commands/init.ts'
 import { log } from './commands/log.ts'
 import { merge } from './commands/merge.ts'
+import { pull } from './commands/pull.ts'
+import { push } from './commands/push.ts'
+import { remote } from './commands/remote.ts'
+import { shell } from './commands/shell.ts'
 import { status } from './commands/status.ts'
 import { checkoutCmd, switchCmd } from './commands/switch.ts'
 import type { GitEvent } from './events.ts'
+import { findWorkspace, resolvePath } from './model/paths.ts'
 import type { ExecContext, FilePath, World } from './model/types.ts'
 import { tokenize } from './parser/tokenize.ts'
 
 export type { CommandResult } from './commands/context.ts'
-export type { GitEvent } from './events.ts'
+export type { GitEvent, PushRejectReason, RefUpdate } from './events.ts'
+export { findWorkspace, resolvePath } from './model/paths.ts'
 export type * from './model/types.ts'
 export * from './query.ts'
 
@@ -30,6 +39,12 @@ const GIT_COMMANDS: Record<string, (cmd: Cmd, argv: string[]) => void> = {
   switch: switchCmd,
   checkout: checkoutCmd,
   merge,
+  config,
+  remote,
+  clone,
+  fetch,
+  pull,
+  push,
 }
 
 /** 本物のgitにはあるが、まだ実装していないサブコマンド（docs/05 §3） */
@@ -46,12 +61,6 @@ const PLANNED = new Set([
   'rebase',
   'cherry-pick',
   'tag',
-  'clone',
-  'remote',
-  'fetch',
-  'pull',
-  'push',
-  'config',
 ])
 
 export interface ExecuteResult extends CommandResult {
@@ -82,6 +91,15 @@ export function writeFile(world: World, workspace: string, path: FilePath, conte
   })
 }
 
+/** 空のディレクトリを作る（mkdir 相当）。キーはパスそのもの */
+export function addWorkspace(world: World, path: string): World {
+  const abs = resolvePath('/', path)
+  if (findWorkspace(world, abs)) return world
+  return produce(world, (draft) => {
+    draft.workspaces[abs] = { path: abs, files: {}, git: null }
+  })
+}
+
 export function deleteFile(world: World, workspace: string, path: FilePath): World {
   return produce(world, (draft) => {
     const ws = draft.workspaces[workspace]
@@ -97,6 +115,7 @@ export function execute(world: World, input: string, ctx: ExecContext): ExecuteR
   const events: GitEvent[] = []
   let exitCode = 0
   let isUnsupported = false
+  let cwd: string | undefined
   let next = world
 
   const tokens = tokenize(input)
@@ -110,6 +129,7 @@ export function execute(world: World, input: string, ctx: ExecContext): ExecuteR
       const cmd: Cmd = { world: draft, ws, ctx, out, err, events }
       try {
         run(cmd, tokens.argv)
+        cwd = cmd.cwd
       } catch (e) {
         if (e instanceof Exit && !e.rollback) {
           exitCode = e.code
@@ -124,12 +144,16 @@ export function execute(world: World, input: string, ctx: ExecContext): ExecuteR
     isUnsupported = e.unsupported
     events.length = 0
   }
-  return finish(next, out, err, exitCode, events, isUnsupported)
+  const result = finish(next, out, err, exitCode, events, isUnsupported)
+  return cwd !== undefined && cwd !== ctx.workspace ? { ...result, cwd } : result
 }
 
 function run(cmd: Cmd, argv: string[]): void {
   const [program, sub, ...rest] = argv
-  if (program !== 'git') unsupported(cmd, `'${program}' コマンド`)
+  if (program !== 'git') {
+    if (shell(cmd, program as string, argv.slice(1))) return
+    unsupported(cmd, `'${program}' コマンド`)
+  }
   if (sub === undefined) {
     cmd.err.push('usage: git <command> [<args>]')
     throw new Exit(1, true)

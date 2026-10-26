@@ -9,6 +9,8 @@ export interface CommandResult {
   events: GitEvent[]
   /** シミュレータが対応していない操作だった（本物のgitのエラーではない） */
   unsupported?: boolean
+  /** cd で移動したときの、新しいワークスペースのキー */
+  cwd?: string
 }
 
 /** コマンドの実行中に使う状態。world は Immer の draft なので直接書き換えてよい */
@@ -19,6 +21,8 @@ export interface Cmd {
   out: string[]
   err: string[]
   events: GitEvent[]
+  /** cd の移動先（ワークスペースのキー） */
+  cwd?: string
 }
 
 /** 終了コードを持って throw する。rollback なら、それまでの変更を捨てる */
@@ -57,6 +61,13 @@ export function unsupported(cmd: Cmd, what: string): never {
 export function requireRepo(cmd: Cmd): GitDir {
   if (!cmd.ws.git) fail(cmd, 'fatal: not a git repository (or any of the parent directories): .git')
   return cmd.ws.git
+}
+
+/** 作業ツリーが必要なコマンド（add, commit, status など）。bare リポジトリでは使えない */
+export function requireWorktree(cmd: Cmd): GitDir {
+  const git = requireRepo(cmd)
+  if (git.bare) fail(cmd, 'fatal: this operation must be run in a work tree')
+  return git
 }
 
 export function configValue(cmd: Cmd, key: string): string | undefined {
