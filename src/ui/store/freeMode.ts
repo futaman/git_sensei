@@ -6,6 +6,7 @@ import {
   createWorld,
   deleteFile,
   type ExecContext,
+  type ExecuteResult,
   execute,
   type GitEvent,
   has,
@@ -22,6 +23,7 @@ import {
   TEAM_BEATS,
   TEAM_PATHS,
 } from '../../scenarios/sandbox/team.ts'
+import { explain } from '../components/terminal/explain.ts'
 import { safeStorage } from '../storage.ts'
 import { restoreSaved } from './restore.ts'
 
@@ -75,10 +77,6 @@ interface FreeModeState extends Stage {
   reset: (preset?: Preset) => void
 }
 
-function now(): ExecContext['now'] {
-  return { timestamp: Math.floor(Date.now() / 1000), tzOffset: -new Date().getTimezoneOffset() }
-}
-
 function info(id: number, text: string): TerminalLine {
   return { id, kind: 'info', text }
 }
@@ -128,11 +126,11 @@ export function currentWorkspace(s: { world: World; cwd: string }): Workspace | 
   return own(s.world.workspaces, s.cwd)
 }
 
-export function promptFor(world: World, cwd: string): string {
+export function promptFor(world: World, cwd: string, home: string = HOME): string {
   const ws = own(world.workspaces, cwd)
   const path = ws?.path ?? cwd
   const shown =
-    path === HOME ? '~' : path.startsWith(`${HOME}/`) ? `~${path.slice(HOME.length)}` : path
+    path === home ? '~' : path.startsWith(`${home}/`) ? `~${path.slice(home.length)}` : path
   const git = ws?.git
   let branch = ''
   if (git && !git.bare) {
@@ -146,17 +144,43 @@ export function promptFor(world: World, cwd: string): string {
   return `you@sensei:${shown}${branch}$`
 }
 
-const HELP = [
+export const HELP = [
   '使えるコマンド:',
   '  git init / add / commit / status / log / branch / switch / checkout',
+  '  git diff / show            … 変更やコミットの中身を見る',
+  '  git restore / checkout -- <file> / reset  … 取り消す（ORIG_HEAD も使えます）',
+  '  git rm / mv                … ファイルを消す・名前を変える',
   '  git merge（--no-ff / --abort / --continue）',
   '  git clone / remote / fetch / pull / push / config',
-  '  cd / pwd / ls / cat',
+  '  cd / pwd / ls / cat / echo / touch / mkdir / rm / mv / cp',
+  '  echo hello > a.txt         … 出力をファイルに書く（>> で追記）',
   '  clear  … ターミナルを消す',
-  'ファイルの作成・編集は左のファイル一覧とエディタで行います。',
+  'ファイルの編集は、左のファイル一覧とエディタでもできます。',
 ]
 
-const MAX_LINES = 500
+export const MAX_LINES = 500
+
+/** コマンドの出力を、ターミナルの行にする。つまずきやすいエラーには、日本語のひとことを添える */
+export function outputLines(
+  r: Pick<ExecuteResult, 'stdout' | 'stderr' | 'unsupported'>,
+  firstId: number,
+  command = '',
+): TerminalLine[] {
+  const out: TerminalLine[] = []
+  let id = firstId
+  const push = (kind: LineKind, text: string) => {
+    for (const line of text.replace(/\n$/, '').split('\n')) out.push({ id: id++, kind, text: line })
+  }
+  if (r.stdout) push('stdout', r.stdout)
+  if (r.stderr) push(r.unsupported ? 'unsupported' : 'stderr', r.stderr)
+  const note = r.unsupported ? null : explain(command, `${r.stdout}${r.stderr}`)
+  if (note) out.push({ id: id++, kind: 'info', text: `ヒント：${note}` })
+  return out
+}
+
+export function now(): ExecContext['now'] {
+  return { timestamp: Math.floor(Date.now() / 1000), tzOffset: -new Date().getTimezoneOffset() }
+}
 
 export const useFreeMode = create<FreeModeState>()(
   persist(
@@ -195,12 +219,9 @@ export const useFreeMode = create<FreeModeState>()(
           ? execute(world, trimmed, { workspace: cwd, now: now(), tty: true, home: HOME })
           : null
         if (r) {
-          const push = (kind: LineKind, text: string) => {
-            for (const line of text.replace(/\n$/, '').split('\n'))
-              add.push({ id: id++, kind, text: line })
-          }
-          if (r.stdout) push('stdout', r.stdout)
-          if (r.stderr) push(r.unsupported ? 'unsupported' : 'stderr', r.stderr)
+          const out = outputLines(r, id, trimmed)
+          add.push(...out)
+          id += out.length
         }
         const logged = (r?.events ?? []).map((event) => ({
           id: id++,

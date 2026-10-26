@@ -44,6 +44,11 @@ export function suggestChips({ git, files, view, servers, clonedChildren }: Chip
     chips.push({ command: 'git add .' })
     chips.push({ command: `git add ${(changed[0] as FileState).path}` })
   }
+  // 追跡中のファイルを変えたなら、何を変えたか見る・取り消すこともできる
+  const modified = changed.find((f) => f.worktree === 'modified')
+  if (modified) {
+    chips.push({ command: 'git diff' }, { command: `git restore ${modified.path}` })
+  }
   if (files.some((f) => f.staged !== null))
     chips.push({ command: 'git commit -m ""', cursorBack: 1 })
 

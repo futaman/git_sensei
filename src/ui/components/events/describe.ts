@@ -19,6 +19,39 @@ export function describeEvent(e: GitEvent): { text: string; tone: Tone } {
         text: `${e.paths.length} 個のファイルの変更をステージしました：${e.paths.join(', ')}`,
         tone: 'normal',
       }
+    case 'FILES_UNSTAGED':
+      return {
+        text: `${e.paths.length} 個のファイルをステージから降ろしました（作業ツリーの中身はそのまま）：${e.paths.join(', ')}`,
+        tone: 'normal',
+      }
+    case 'CHANGES_DISCARDED':
+      return {
+        text: `まだコミットしていない変更を捨てました：${e.paths.join(', ')}。どのコミットにも残っていないので、もう取り戻せません`,
+        tone: 'warn',
+      }
+    case 'RESET':
+      return {
+        text: `${e.branch ?? 'HEAD'} を ${e.to.slice(0, 7)} に動かしました（reset --${e.mode}${
+          e.mode === 'soft'
+            ? '：ステージと作業ツリーはそのまま'
+            : e.mode === 'mixed'
+              ? '：ステージも戻し、作業ツリーはそのまま'
+              : '：ステージも作業ツリーも戻しました'
+        }）。元の位置は ORIG_HEAD で指せます`,
+        tone: e.mode === 'hard' ? 'warn' : 'normal',
+      }
+    case 'FILES_REMOVED':
+      return {
+        text: e.cached
+          ? `${e.paths.join(', ')} を git の管理から外しました（ファイルは手元に残っています）`
+          : `${e.paths.join(', ')} を削除して、その削除をステージしました`,
+        tone: 'normal',
+      }
+    case 'FILE_MOVED':
+      return {
+        text: `${e.from} を ${e.to} に移動（名前変更）して、ステージしました`,
+        tone: 'normal',
+      }
     case 'COMMIT_CREATED':
       return {
         text: e.amend

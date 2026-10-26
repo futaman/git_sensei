@@ -13,7 +13,7 @@ export function commandInput(args: {
   /** このコマンドで新たに満たしたマイルストーン（シナリオが判定する） */
   milestones?: string[]
   policy: DangerPolicy
-}): DramaInput {
+}): Extract<DramaInput, { type: 'command' }> {
   const { command, workspace, result, at, policy } = args
   return {
     type: 'command',

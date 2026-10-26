@@ -86,6 +86,8 @@ export interface GitDir {
   previousBranch: string | null
   /** detached HEAD になった時点のコミット（status の "detached at / from" の判定に使う） */
   detachedAt: Oid | null
+  /** merge / pull / reset で動く前の HEAD（本物の .git/ORIG_HEAD）。古い保存データにはない */
+  origHead?: Oid
 }
 
 export interface Workspace {

@@ -22,13 +22,19 @@ const SUBCOMMANDS = [
   'clone',
   'commit',
   'config',
+  'diff',
   'fetch',
   'init',
   'log',
   'merge',
+  'mv',
   'pull',
   'push',
   'remote',
+  'reset',
+  'restore',
+  'rm',
+  'show',
   'status',
   'switch',
 ]
@@ -36,7 +42,12 @@ const SUBCOMMANDS = [
 const OPTIONS: Record<string, string[]> = {
   add: ['--all', '--update'],
   branch: ['--all', '--delete', '--move', '--remotes', '--set-upstream-to', '--show-current', '-D'],
-  checkout: ['-b', '--detach'],
+  checkout: ['-b', '--detach', '--ours', '--theirs'],
+  diff: ['--staged', '--cached', '--stat', '--name-only', '--name-status'],
+  reset: ['--soft', '--mixed', '--hard'],
+  restore: ['--staged', '--worktree', '--source', '--ours', '--theirs'],
+  rm: ['--cached', '-r', '-f'],
+  show: ['--stat', '--name-only', '--oneline'],
   commit: ['--all', '--amend', '--allow-empty', '--message', '--no-edit'],
   fetch: ['--prune'],
   log: ['--all', '--decorate', '--oneline'],
@@ -59,7 +70,14 @@ function argumentCandidates(sub: string, argIndex: number, names: CompletionName
   const tracking = names.remoteBranches ?? []
   switch (sub) {
     case 'add':
+    case 'restore':
+    case 'rm':
+    case 'mv':
       return names.files
+    case 'diff':
+    case 'show':
+    case 'reset':
+      return [...names.branches, ...tracking, 'HEAD', 'HEAD~1', 'ORIG_HEAD', ...names.files]
     case 'checkout':
       return [...names.branches, ...remoteShortNames(names), ...names.files]
     case 'switch':

@@ -252,3 +252,42 @@ M3の時点で、本物のgitと違う点や未対応のもの：
 - `rebase`、`pull --rebase`、`merge --quit`、`--strategy`、`-X ours/theirs` は未対応
 - 行の差分は最長共通部分列で求めている。同じ行が何度も出てくるファイルでは、git（Myers）とコンフリクトの区切り方が変わることがある
 - フリーモードのチームで練習：同僚（NPC）は `pull.rebase=false` で、分岐していればマージで取り込む。force push で消されたコミットも、持っていた同僚が pull してマージすると、サーバーに戻ってくる（本物と同じ）
+
+### 取り消し・確認のコマンドとシェル（M5 の一部を前倒し、2026-10-27）
+
+試遊で「git checkout で元に戻すのは普通に欲しい」「git やコマンドラインの機能をもう少し」と言われたので足した。
+
+足した git のコマンド：
+
+| コマンド | 対応したこと |
+|---|---|
+| `checkout [<commit>] [--] <file>` | 作業ツリーを index（コミットを指定したら index も）の内容に戻す。`--ours` / `--theirs`。`--` なしのときだけ「Updated N paths from …」を出す（本物と同じ。数は実際に書き換えたファイルだけ。コミットから戻したときは、その tree の短縮ハッシュ） |
+| `restore <file>` | `--staged`、`--worktree`、`--source` / `-s`、`--ours` / `--theirs`。元にないファイルは消す（no-overlay） |
+| `reset` | `--soft` / `--mixed`（既定）/ `--hard`、`reset [<commit>] [--] <file>`（ステージから降ろす）。マージの途中をやめる。`ORIG_HEAD` を書く |
+| `diff` | 作業ツリーと index、`--staged` / `--cached`、`<commit>`、`A B`、`A..B`、`-- <path>`、`--stat`、`--name-only`、`--name-status`。コンフリクト中の `--staged` は `* Unmerged path` |
+| `show` | コミットの見出しと差分、`--stat`、`--name-only`、`--name-status`、`--oneline`、`-s`、`REV:path`（ファイルの中身） |
+| `rm` | `--cached`、`-r`、`-f`、`-q`。手元の変更やステージ済みの変更があれば止める |
+| `mv` | ファイル1つの名前の変更と、フォルダの中への移動 |
+
+- `ORIG_HEAD`：merge（早送り・マージコミット・コンフリクト）、pull、reset で書く。`MERGE_HEAD` もリビジョンとして使える
+- `status`：同じ中身のまま名前を変えたファイル（ステージ済みの削除と追加）を `R  old -> new` / `renamed:` と表示する
+- 差分（`src/engine/diff/unified.ts`）：Myers の O(ND) 法。文脈3行、近いハンクのまとめ、`,1` の省略、`\ No newline at end of file`、見出しの関数名（英字・`_`・`$` で始まる行。80バイトまで）を xdiff に合わせた
+- 意味イベントを追加した：`FILES_UNSTAGED`、`CHANGES_DISCARDED`（どのオブジェクトにも残っていない内容を消した。`reset --hard` と `.` の指定は bulk）、`RESET`、`FILES_REMOVED`、`FILE_MOVED`
+- 危険：`CHANGES_DISCARDED` が bulk のときだけ `UNCOMMITTED_CHANGES_DISCARDED`。ファイルを指定した取り消しは、わかってやっている操作なので危険にしない
+
+シェル：`echo`、`touch`、`mkdir`、`rm`（`-r` / `-f`、`rm -rf .git` でリポジトリごと消える）、`mv`、`cp`（`-r`）、`ls <dir>`、`cat`。出力のリダイレクト `>` / `>>` は、どのコマンドにも使える。パイプ（`|`）、`&&`、`;` は「まだ使えません」と伝える。
+
+- フォルダはファイルのパスから決まるので、リポジトリの中の空のフォルダは作れない（`mkdir` は「中にファイルを作ると現れます」と伝える）。リポジトリの外（ホームなど）では、新しいフォルダとして作り、`cd` して `git init` できる
+- リポジトリの中のフォルダには `cd` できない（git のコマンドはルートで実行する作り）。そう伝える
+
+突き合わせテスト（`tests/golden/undo.test.ts`、28件）で、上の git のコマンドの出力・終了コード・index・作業ツリーが本物と一致することを確かめた。シェルは `src/engine/shell.test.ts`。
+
+まだ違う点・未対応のもの：
+
+- `checkout -m` / `restore --merge`（コンフリクトの印を作り直す）、`reset --merge` / `--keep`
+- コンフリクト中の `git diff`（diff --cc）。マージコミットの `git show` は見出しだけ（手で直したファイルがあれば、その旨を git-sensei として伝える）
+- 差分に indent heuristic がないので、同じ行が続くところへの挿入などでは、ハンクの区切りが本物と違うことがある
+- 名前の変更の検出は、中身がまったく同じときだけ
+- `revert`、`reflog`、`stash`、`rebase`、`cherry-pick`、`tag` は、まだ未対応
+
+画面では、つまずきやすいエラー（空のコミットメッセージ、push の拒否、コンフリクトなど）のあとに、日本語のひとこと（「ヒント：」）を添える（`src/ui/components/terminal/explain.ts`）。git の出力そのものは変えない。

@@ -4,3 +4,192 @@
   --font-sans: "Noto Sans JP", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 }
+
+/* ステージの演出（docs/04 §11.3 の Cue）。動きを減らす設定の人には、揺れと飛び出しを止める */
+@keyframes stage-shake {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  20% {
+    transform: translate(-6px, 2px);
+  }
+  40% {
+    transform: translate(5px, -3px);
+  }
+  60% {
+    transform: translate(-4px, 3px);
+  }
+  80% {
+    transform: translate(3px, -2px);
+  }
+}
+@keyframes stage-cutin {
+  0% {
+    transform: translateX(-100%) skewX(-12deg);
+    opacity: 0;
+  }
+  15% {
+    transform: translateX(0) skewX(-12deg);
+    opacity: 1;
+  }
+  85% {
+    transform: translateX(0) skewX(-12deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(100%) skewX(-12deg);
+    opacity: 0;
+  }
+}
+@keyframes stage-flash {
+  0%,
+  30%,
+  60% {
+    background-color: rgb(253 224 71 / 0.9);
+  }
+  15%,
+  45%,
+  100% {
+    background-color: rgb(15 23 42 / 0.92);
+  }
+}
+@keyframes stage-bounce {
+  0% {
+    transform: translateY(-40px);
+    opacity: 0;
+  }
+  40% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  55% {
+    transform: translateY(-10px);
+  }
+  70% {
+    transform: translateY(0);
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes stage-fly {
+  0% {
+    transform: translate(0, 0) rotate(0);
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(260px, -160px) rotate(540deg);
+    opacity: 0;
+  }
+}
+@keyframes stage-fade {
+  0% {
+    opacity: 0;
+  }
+  15%,
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes stage-slide-in {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+@keyframes stage-stamp {
+  0% {
+    transform: scale(2.4) rotate(-18deg);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(0.92) rotate(-12deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(-12deg);
+    opacity: 1;
+  }
+}
+@keyframes stage-tremble {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-1px);
+  }
+  75% {
+    transform: translateX(1px);
+  }
+}
+
+.stage-shake-1 {
+  animation: stage-shake 0.25s 1;
+}
+.stage-shake-2 {
+  animation: stage-shake 0.3s 2;
+}
+.stage-shake-3 {
+  animation: stage-shake 0.35s 3;
+}
+.stage-cutin {
+  animation: stage-cutin 1.6s ease-out forwards;
+}
+.stage-flash {
+  animation: stage-flash 0.9s steps(1) 1 forwards;
+}
+.stage-bounce {
+  animation: stage-bounce 2.4s ease-out forwards;
+}
+.stage-fly {
+  animation: stage-fly 1.6s ease-in forwards;
+}
+.stage-fade {
+  animation: stage-fade 2.4s ease-out forwards;
+}
+.stage-slide-in {
+  animation: stage-slide-in 0.35s ease-out;
+}
+.stage-stamp {
+  animation: stage-stamp 0.5s ease-out forwards;
+}
+.stage-tremble {
+  animation: stage-tremble 0.15s infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage-shake-1,
+  .stage-shake-2,
+  .stage-shake-3,
+  .stage-fly,
+  .stage-tremble {
+    animation: none;
+  }
+  .stage-cutin,
+  .stage-bounce {
+    animation: stage-fade 1.6s ease-out forwards;
+  }
+  .stage-flash {
+    animation: none;
+    background-color: rgb(15 23 42 / 0.92);
+  }
+  .stage-stamp {
+    animation: none;
+    transform: rotate(-12deg);
+  }
+}

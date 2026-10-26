@@ -79,7 +79,7 @@ describe('execute', () => {
       exitCode: 1,
       unsupported: true,
     })
-    expect(execute(base.world, 'rm -rf build', ctx).unsupported).toBe(true)
+    expect(execute(base.world, 'grep TODO README.md', ctx).unsupported).toBe(true)
     expect(execute(base.world, 'git commit', ctx).unsupported).toBe(true)
   })
 

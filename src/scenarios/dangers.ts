@@ -1,11 +1,13 @@
 // 危険な操作の判定（docs/04 §4.2）。エンジンの意味イベントと world を見て、演出エンジンに渡す信号にする。
 // drama 層は world を調べられない（engine の型だけに依存する）ので、ここで行う。
-import type { DangerKind, DangerSignal } from '../drama/index.ts'
+import type { DangerKind, DangerSignal, YabaLevel } from '../drama/index.ts'
 import {
+  commitFileContents,
   commitFiles,
   commitMessage,
   commitsBetween,
   type GitEvent,
+  hasConflictMarkers,
   remoteRepository,
   type World,
 } from '../engine/index.ts'
@@ -58,10 +60,13 @@ export function detectDangers(
   const secrets = policy.secretPatterns ?? DEFAULT_SECRETS
   const junk = policy.junkPatterns ?? DEFAULT_JUNK
   const bad = policy.badMessages ?? DEFAULT_BAD_MESSAGES
-  const found = new Map<DangerKind, string | undefined>()
-  const flag = (kind: DangerKind, detail?: string) => {
-    if (!found.has(kind)) found.set(kind, detail)
+  const found = new Map<DangerKind, { detail?: string; level?: YabaLevel }>()
+  const flag = (kind: DangerKind, detail?: string, level?: YabaLevel) => {
+    if (!found.has(kind)) found.set(kind, { detail, level })
   }
+  /** コミットの中で、コンフリクトの印が残っているファイル */
+  const markedFile = (repo: typeof git, oid: string) =>
+    Object.entries(commitFileContents(repo, oid)).find(([, text]) => hasConflictMarkers(text))?.[0]
 
   for (const e of events) {
     switch (e.type) {
@@ -87,10 +92,15 @@ export function detectDangers(
               break
             }
           }
+          // 印が残ったまま push した：みんなに広がるので Lv3（docs/04_spec_scenarios §4.4）
+          const marked = markedFile(target, u.to)
+          if (marked) flag('CONFLICT_MARKER_COMMITTED', marked, 3)
         }
         break
       }
       case 'COMMIT_CREATED': {
+        const marked = markedFile(git, e.oid)
+        if (marked) flag('CONFLICT_MARKER_COMMITTED', marked)
         if (e.parents.length > 1) break
         const subject = commitMessage(git, e.oid).split('\n')[0]?.trim() ?? ''
         if (bad.test(subject)) flag('BAD_COMMIT_MESSAGE', subject)
@@ -101,13 +111,18 @@ export function detectDangers(
         if (junkFile) flag('JUNK_STAGED', junkFile)
         break
       }
+      case 'CHANGES_DISCARDED':
+        // ファイルを指定して戻すのは、わかってやっている取り消し。まとめて消したとき（reset --hard、'.'）だけ危険とみなす
+        if (e.bulk) flag('UNCOMMITTED_CHANGES_DISCARDED', e.paths.join('、'))
+        break
       default:
         break
     }
   }
-  return [...found].map(([kind, detail]) => ({
+  return [...found].map(([kind, { detail, level }]) => ({
     kind,
     allowed: policy.allow?.(kind, command) ?? false,
     ...(detail !== undefined ? { detail } : {}),
+    ...(level !== undefined ? { level } : {}),
   }))
 }

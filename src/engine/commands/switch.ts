@@ -18,6 +18,7 @@ import { localChangeLines, switchErrorLines, switchTrees } from '../worktree/che
 import { createBranch } from './branch.ts'
 import { subjectOf } from './commit.ts'
 import { abort, type Cmd, fail, requireWorktree, unsupported } from './context.ts'
+import { checkoutPaths } from './restore.ts'
 import { trackingLines } from './status.ts'
 
 type Destination = { branch: string; created?: boolean } | { detach: Oid; spec: string }
@@ -71,45 +72,84 @@ export function switchCmd(cmd: Cmd, argv: string[]): void {
 }
 
 export function checkoutCmd(cmd: Cmd, argv: string[]): void {
-  const parsed = parseArgs(argv, [
+  const specs = [
     { name: 'branch', short: 'b', value: true },
     { name: 'force-branch', short: 'B', value: true },
     { name: 'detach', long: ['detach'] },
-  ])
+    { name: 'ours', long: ['ours'] },
+    { name: 'theirs', long: ['theirs'] },
+    { name: 'merge', short: 'm', long: ['merge'] },
+  ]
+  const parsed = parseArgs(argv, specs)
   if (!parsed.ok) fail(cmd, parsed.error, 129)
   const { flags, values, positionals } = parsed.args
   const git = requireWorktree(cmd)
-  refuseDuringConflict(cmd, git, false)
-  if (argv.includes('--')) unsupported(cmd, 'git checkout -- <file>（ファイルの復元）')
+
+  // -- より前の引数（コミットの指定）と、後ろの引数（ファイル）を分ける
+  const dashdash = argv.indexOf('--')
+  const before =
+    dashdash === -1
+      ? positionals
+      : (parseArgs(argv.slice(0, dashdash), specs) as typeof parsed).args.positionals
+  const side = flags.has('ours') ? 'ours' : flags.has('theirs') ? 'theirs' : null
+  if (flags.has('merge') && (dashdash !== -1 || side)) {
+    unsupported(cmd, 'git checkout -m <file>（コンフリクトの印を作り直す）')
+  }
+  if (dashdash !== -1 || side) {
+    const files = dashdash === -1 ? positionals : argv.slice(dashdash + 1)
+    if (before.length > 1 || (dashdash === -1 && side === null)) {
+      fail(cmd, 'fatal: only one reference expected')
+    }
+    const treeish = dashdash === -1 ? null : (before[0] ?? null)
+    if (files.length === 0) {
+      if (treeish !== null && dashdash !== -1) {
+        // git checkout <commit> -- はファイル指定なし：ブランチの切り替えとして扱う
+      } else fail(cmd, 'fatal: you must specify path(s) to restore')
+    } else {
+      if (treeish !== null && !resolveRevision(git, treeish)) {
+        fail(cmd, `fatal: invalid reference: ${treeish}`)
+      }
+      checkoutPaths(cmd, git, treeish, files, side, dashdash === -1)
+      return
+    }
+  }
 
   const create = values.get('branch')?.[0] ?? values.get('force-branch')?.[0]
   if (create !== undefined) {
+    refuseDuringConflict(cmd, git, false)
     if (positionals.length > 1) unsupported(cmd, 'git checkout -b のファイル指定')
     startNewBranch(cmd, git, create, positionals[0], values.has('force-branch'))
     return
   }
   if (positionals.length === 0) fail(cmd, 'git-sensei: 切り替え先のブランチを指定してください', 1)
-  if (positionals.length > 1) unsupported(cmd, 'git checkout <commit> <file>（ファイルの復元）')
+  if (positionals.length > 1) {
+    // git checkout <commit> <file>...：最初の引数がコミットなら、残りはファイル
+    const [first, ...rest] = positionals as [string, ...string[]]
+    if (resolveRevision(git, first)) checkoutPaths(cmd, git, first, rest, null, true)
+    else checkoutPaths(cmd, git, null, positionals, null, true)
+    return
+  }
 
   const spec = resolvePrevious(cmd, git, positionals[0] as string)
   if (!flags.has('detach') && has(git.refs, branchRef(spec))) {
+    refuseDuringConflict(cmd, git, false)
     moveHead(cmd, git, { branch: spec })
     return
   }
   const guess = flags.has('detach') ? null : guessRemoteBranch(git, spec)
   if (guess && !resolveRevision(git, spec)) {
+    refuseDuringConflict(cmd, git, false)
     startNewBranch(cmd, git, spec, guess, false)
     return
   }
   const oid = resolveRevision(git, spec)
   if (oid) {
+    refuseDuringConflict(cmd, git, false)
     moveHead(cmd, git, { detach: oid, spec })
     return
   }
-  if (has(cmd.ws.files, spec) || Object.keys(git.index).some((p) => p === spec)) {
-    unsupported(cmd, 'git checkout <file>（ファイルの復元）')
-  }
-  fail(cmd, `error: pathspec '${spec}' did not match any file(s) known to git`, 1)
+  // ブランチでもコミットでもなければ、ファイルを index の内容に戻す（git checkout <file>）
+  checkoutPaths(cmd, git, null, [spec], null, true)
 }
 
 /** コンフリクトの途中は切り替えられない（switch はマージの途中そのものも断る） */

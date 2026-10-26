@@ -126,7 +126,7 @@ describe('危険な操作と上司の機嫌', () => {
     expect(state.mood).toBe(5)
     expect(state.trust).toBe(65)
     expect(state.dangers).toBe(1)
-    expect(last).toContainEqual({ type: 'report', kind: 'FORCE_PUSH_OVERWROTE' })
+    expect(last).toContainEqual({ type: 'report', kind: 'FORCE_PUSH_OVERWROTE', level: 4 })
     expect(last).toContainEqual({ type: 'cutin', who: 'boss', variant: 'rage' })
     expect(last).toContainEqual({ type: 'mood', stage: 'boiling' })
   })
@@ -220,7 +220,10 @@ describe('時間', () => {
     const { state, cues } = play([{ type: 'tick', at: 500_000 }], settings)
     expect(state.trust).toBe(80)
     expect(state.mood).toBe(50)
-    expect(cues.flat().filter((c) => c.type === 'deadline' || c.type === 'typing')).toEqual([])
+    // 手が止まったことへの気づき（減点なし）は出すが、期限と「入力中…が消える」減点は出さない
+    expect(
+      cues.flat().filter((c) => c.type === 'deadline' || (c.type === 'typing' && c.vanish)),
+    ).toEqual([])
   })
 
   it('作中の時計（24時を過ぎても数え続ける）', () => {
@@ -292,5 +295,115 @@ describe('表情と決定性', () => {
     const restored = JSON.parse(JSON.stringify(state)) as DramaState
     const next = cmd(3000, 'git add a', 'h1')
     expect(stepDrama(restored, next, base)).toEqual(stepDrama(state, next, base))
+  })
+})
+
+describe('シナリオ向けの機能（docs/06）', () => {
+  it('コマンドの所要時間で作中の時計が飛び、期限も近づく', () => {
+    const settings = { ...base, deadlineSec: 100, clockStart: '17:45', clockScale: 3 }
+    const { state, last } = play([cmd(10_000, 'git push', 'h1', { durationSec: 240 })], settings)
+    expect(state.extraClockSec).toBe(240)
+    expect(last).toContainEqual({ type: 'clock', jumpedSec: 240, extraSec: 240 })
+    // 実時間10秒（作中30秒）＋飛んだ240秒 → 17:49
+    expect(clockText(settings, 10_000, state.extraClockSec)).toBe('17:49')
+    // 作中240秒 ＝ 実時間80秒ぶん期限が近づく：10 + 80 = 90秒 → 残り10% で urgent
+    expect(state.deadlineLevel).toBe('none')
+    const later = stepDrama(state, { type: 'tick', at: 11_000 }, settings)
+    expect(later.state.deadlineLevel).toBe('urgent')
+  })
+
+  it('シナリオからのセリフ（note）は、信頼・機嫌も動かせる', () => {
+    const { state, last } = play([
+      { type: 'note', at: 1000, from: 'kouhai', key: 'kouhai.noop', trust: -3 },
+    ])
+    expect(state.trust).toBe(77)
+    expect(chats(last)).toEqual(['kouhai.noop'])
+  })
+
+  it('手が止まると先輩が助け舟を出し、回数ごとに方向をはっきりさせていく', () => {
+    const settings: DramaSettings = {
+      ...base,
+      cast: ['kouhai', 'boss', 'senpai'],
+      idleHelper: true,
+      lines: { 'senpai.idle': ['ヒント1', 'ヒント2', 'ヒント3'] },
+    }
+    const { cues } = play(
+      [{ type: 'tick', at: 21_000 }, cmd(30_000, 'git status', 'h0'), { type: 'tick', at: 51_000 }],
+      settings,
+    )
+    const hints = cues
+      .flat()
+      .filter((c) => c.type === 'chat' && c.from === 'senpai')
+      .map((c) => (c as { text: string }).text)
+    expect(hints).toEqual(['ヒント1', 'ヒント2'])
+  })
+
+  it('シナリオが助け舟の key を渡せば、そちらを言う（間違えた後の声かけ）', () => {
+    const settings: DramaSettings = {
+      ...base,
+      cast: ['kouhai', 'boss', 'senpai'],
+      idleHelper: true,
+      lines: { 'senpai.idle.mistake': ['もう一回よく見てみ'] },
+    }
+    const { cues } = play(
+      [{ type: 'tick', at: 21_000, helperKey: 'senpai.idle.mistake' }],
+      settings,
+    )
+    const senpai = cues.flat().filter((c) => c.type === 'chat' && c.from === 'senpai')
+    expect(senpai).toEqual([expect.objectContaining({ key: 'senpai.idle.mistake' })])
+  })
+
+  it('結末はシナリオが差し替え・追加できる。始末書があるときは追加しない', () => {
+    const cast: DramaSettings['cast'] = ['kouhai', 'boss', 'senpai']
+    const finish = {
+      type: 'finish' as const,
+      at: 1000,
+      replace: { 'ending.thanks': 'ending.thanksRecovered' },
+      epilogue: [{ from: 'senpai' as const, key: 'ending.recovered' }],
+    }
+    const lines = {
+      'ending.thanksRecovered': ['戻ってよかったです'],
+      'ending.recovered': ['それで合ってる'],
+    }
+    const { last } = play([finish], { ...base, cast, deadlineSec: 100, lines })
+    expect(chats(last).slice(0, 3)).toEqual([
+      'ending.onTime',
+      'ending.thanksRecovered',
+      'ending.recovered',
+    ])
+  })
+
+  it('マイルストーンごとのセリフがあれば、そちらを使う', () => {
+    const settings = { ...base, lines: { 'milestone.pulled': ['ぶつかった…'] } }
+    const { last } = play([cmd(1000, 'git pull', 'h1', { milestones: ['pulled'] })], settings)
+    expect(chats(last)).toEqual(['milestone.pulled'])
+  })
+
+  it('結末：期限内なら部長→後輩、始末書があれば先輩、遅れたら部長', () => {
+    const cast: DramaSettings['cast'] = ['kouhai', 'boss', 'senpai']
+    const onTime = play([{ type: 'finish', at: 1000 }], { ...base, cast, deadlineSec: 100 })
+    expect(chats(onTime.last)).toEqual(['ending.onTime', 'ending.thanks', 'kouhai.rank.A'])
+    const late = play([{ type: 'finish', at: 200_000 }], { ...base, cast, deadlineSec: 100 })
+    expect(chats(late.last)).toContain('ending.late')
+    expect(chats(late.last)).not.toContain('ending.onTime')
+    const reported = play(
+      [
+        cmd(1000, 'git push --force', 'h1', {
+          dangers: [{ kind: 'FORCE_PUSH_OVERWROTE', allowed: false }],
+        }),
+        { type: 'finish', at: 2000 },
+      ],
+      { ...base, cast, deadlineSec: 100 },
+    )
+    expect(chats(reported.last)[0]).toBe('ending.afterReport')
+  })
+
+  it('始末書のヤバ度は、信号の level があればそれを使う', () => {
+    const { last } = play([
+      cmd(1000, 'git push', 'h1', {
+        dangers: [{ kind: 'CONFLICT_MARKER_COMMITTED', allowed: false, level: 3 }],
+      }),
+    ])
+    expect(last).toContainEqual({ type: 'report', kind: 'CONFLICT_MARKER_COMMITTED', level: 3 })
   })
 })

@@ -85,13 +85,43 @@ export function trackingLines(git: GitDir): string[] {
   ]
 }
 
+/**
+ * 名前を変えただけのファイル（ステージ済みの削除と追加で、中身がまったく同じもの）。新しい名前 → 元の名前。
+ * 本物の git は中身が似ているだけでも名前の変更とみなすが、ここでは同じ中身のときだけにする
+ */
+function exactRenames(git: GitDir, st: WorktreeStatus): Map<string, string> {
+  const renames = new Map<string, string>()
+  const kinds = [...st.staged]
+  const deleted = kinds
+    .filter(([, k]) => k === 'D')
+    .map(([p]) => p)
+    .sort()
+  const added = kinds
+    .filter(([, k]) => k === 'A')
+    .map(([p]) => p)
+    .sort()
+  const used = new Set<string>()
+  for (const to of added) {
+    const oid = own(git.index, to)?.oid
+    const from = deleted.find((d) => !used.has(d) && own(st.head, d)?.oid === oid)
+    if (from === undefined) continue
+    used.add(from)
+    renames.set(to, from)
+  }
+  return renames
+}
+
 export function shortStatusLines(git: GitDir, st: WorktreeStatus): string[] {
-  const paths = [
-    ...new Set([...st.staged.keys(), ...st.unstaged.keys(), ...st.unmerged.keys()]),
-  ].sort()
-  const lines = paths.map(
-    (p) => `${st.unmerged.get(p) ?? `${st.staged.get(p) ?? ' '}${st.unstaged.get(p) ?? ' '}`} ${p}`,
-  )
+  const renames = exactRenames(git, st)
+  const sources = new Set(renames.values())
+  const paths = [...new Set([...st.staged.keys(), ...st.unstaged.keys(), ...st.unmerged.keys()])]
+    .filter((p) => !sources.has(p))
+    .sort()
+  const lines = paths.map((p) => {
+    const from = renames.get(p)
+    if (from !== undefined) return `R${st.unstaged.get(p) ?? ' '} ${from} -> ${p}`
+    return `${st.unmerged.get(p) ?? `${st.staged.get(p) ?? ' '}${st.unstaged.get(p) ?? ' '}`} ${p}`
+  })
   for (const p of collapseUntracked(git, st.untracked)) lines.push(`?? ${p}`)
   return lines
 }
@@ -148,8 +178,12 @@ export function longStatusLines(git: GitDir, st: WorktreeStatus): string[] {
           : '  (use "git rm --cached <file>..." to unstage)',
       )
     }
+    const renames = exactRenames(git, st)
+    const sources = new Set(renames.values())
     for (const [path, kind] of [...st.staged].sort(([a], [b]) => (a < b ? -1 : 1))) {
-      lines.push(`\t${label(kind)}${path}`)
+      const from = renames.get(path)
+      if (from !== undefined) lines.push(`\t${'renamed:'.padEnd(12)}${from} -> ${path}`)
+      else if (!sources.has(path)) lines.push(`\t${label(kind)}${path}`)
     }
     lines.push('')
   }

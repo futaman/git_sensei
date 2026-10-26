@@ -18,6 +18,25 @@ export type PushRejectReason = 'fetch-first' | 'non-fast-forward' | 'stale-info'
 export type GitEvent =
   | { type: 'REPO_INITIALIZED'; reinitialized: boolean }
   | { type: 'FILES_STAGED'; paths: string[] }
+  /** ステージから降ろした（git restore --staged、git reset <file> など） */
+  | { type: 'FILES_UNSTAGED'; paths: string[] }
+  /**
+   * まだコミットしていない変更を、作業ツリーから消した（checkout -- / restore / reset --hard）。
+   * 消えたのは、どのコミットにも残っていない内容。bulk はまとめて消す操作（reset --hard、'.' の指定）
+   */
+  | { type: 'CHANGES_DISCARDED'; paths: string[]; bulk: boolean }
+  /** git reset でブランチ（または detached HEAD）を動かした */
+  | {
+      type: 'RESET'
+      mode: 'soft' | 'mixed' | 'hard'
+      branch: string | null
+      from: Oid | null
+      to: Oid
+    }
+  /** git rm。cached なら作業ツリーのファイルは残る */
+  | { type: 'FILES_REMOVED'; paths: string[]; cached: boolean }
+  /** git mv */
+  | { type: 'FILE_MOVED'; from: string; to: string }
   | { type: 'COMMIT_CREATED'; oid: Oid; parents: Oid[]; branch: string | null; amend: boolean }
   | { type: 'BRANCH_CREATED'; name: string; oid: Oid }
   | { type: 'BRANCH_DELETED'; name: string; oid: Oid; force: boolean }

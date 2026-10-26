@@ -41,6 +41,8 @@ export function initDrama(settings: DramaSettings, initialHash: string): DramaSt
     reports: [],
     smartUsed: {},
     lastActivityAt: 0,
+    extraClockSec: 0,
+    helperHints: 0,
     idleStrikes: 0,
     idleNoticed: false,
     deadlineLevel: 'none',
@@ -64,14 +66,21 @@ const clamp = (v: number) => Math.max(0, Math.min(100, v))
 export function stepDrama(prev: DramaState, input: DramaInput, settings: DramaSettings): DramaStep {
   if (prev.finished) return { state: prev, cues: [] }
   const run = new Run(structuredClone(prev), settings)
-  run.passTime(input.at)
+  run.passTime(input.at, input.type === 'tick' ? input.helperKey : undefined)
   switch (input.type) {
     case 'tick':
       break
     case 'hint':
       run.trust(DRAMA.trust.delta.hint)
       run.say('kouhai', 'kouhai.hint', 'whisper')
+      run.advanceClock(input.durationSec ?? 0)
       run.activity(input.at)
+      break
+    case 'note':
+      // シナリオが決めた場面のセリフ。手は動いていないので、手が止まった数え直しはしない
+      if (input.trust) run.trust(input.trust)
+      if (input.mood) run.mood(input.mood)
+      run.say(input.from, input.key, 'normal')
       break
     case 'choice': {
       const effect = settings.choices?.find((c) => c.id === input.id)
@@ -82,10 +91,11 @@ export function stepDrama(prev: DramaState, input: DramaInput, settings: DramaSe
     }
     case 'command':
       run.command(input)
+      run.advanceClock(input.durationSec ?? 0)
       run.activity(input.at)
       break
     case 'finish':
-      run.finish(input.at)
+      run.finish(input)
       break
   }
   return run.done()
@@ -156,15 +166,36 @@ class Run {
     this.s.idleNoticed = false
   }
 
+  /** 実時間に、時計が飛んだぶん（作中の秒 ÷ clockScale）を足した経過ミリ秒 */
+  effectiveAt(at: number): number {
+    return at + (this.s.extraClockSec * 1000) / (this.settings.clockScale ?? 1)
+  }
+
+  hasLine(key: string): boolean {
+    return (this.settings.lines?.[key] ?? DEFAULT_LINES[key] ?? []).length > 0
+  }
+
+  /** 所要時間のぶん作中の時計を進める（docs/06 §2.2） */
+  advanceClock(seconds: number): void {
+    if (seconds <= 0) return
+    this.s.extraClockSec += seconds
+    this.cues.push({ type: 'clock', jumpedSec: seconds, extraSec: this.s.extraClockSec })
+  }
+
   /** 前の入力から at までの時間の経過：手が止まったときの反応と、期限（docs/04 §8） */
-  passTime(at: number): void {
-    if (this.settings.untimed) return
+  passTime(at: number, helperKey?: string): void {
     const idle = DRAMA.idle
     const since = at - this.s.lastActivityAt
-    if (this.kouhai && since >= idle.noticeMs && !this.s.idleNoticed) {
+    // 手が止まったことに気づく（減点なし）。時間制限なしモードでも、助け舟は出す
+    if (since >= idle.noticeMs && !this.s.idleNoticed) {
       this.s.idleNoticed = true
-      this.cues.push({ type: 'typing', who: 'kouhai', vanish: false })
+      if (this.kouhai) this.cues.push({ type: 'typing', who: 'kouhai', vanish: false })
+      if (this.settings.idleHelper && this.settings.cast.includes('senpai')) {
+        this.s.helperHints++
+        this.say('senpai', helperKey ?? 'senpai.idle', 'normal', this.s.helperHints)
+      }
     }
+    if (this.settings.untimed) return
     const strikes =
       since >= idle.penaltyFromMs
         ? 1 + Math.floor((since - idle.penaltyFromMs) / idle.penaltyEveryMs)
@@ -175,7 +206,8 @@ class Run {
       this.cues.push({ type: 'typing', who: 'kouhai', vanish: true })
     }
 
-    const remaining = remainingMs(this.settings, at)
+    // 所要時間で時計が飛んだぶん、期限も近づく
+    const remaining = remainingMs(this.settings, this.effectiveAt(at))
     if (remaining === null) return
     const total = (this.settings.deadlineSec as number) * 1000
     const ratio = remaining / total
@@ -249,10 +281,13 @@ class Run {
         }
         break
       }
-      case 'progress':
+      case 'progress': {
         this.trust(d.progress * input.milestones.length)
-        this.say('kouhai', 'kouhai.progress', 'normal')
+        // シナリオがマイルストーンごとのセリフ（milestone.<id>）を用意していれば、そちらを使う
+        const own = input.milestones.find((m) => this.hasLine(`milestone.${m}`))
+        this.say('kouhai', own ? `milestone.${own}` : 'kouhai.progress', 'normal')
         break
+      }
       case 'quickfix':
         this.trust(d.quickfix)
         this.say('kouhai', 'kouhai.quickfix', 'whisper')
@@ -289,7 +324,7 @@ class Run {
       }
       if (!this.s.reports.includes(d.kind)) {
         this.s.reports.push(d.kind)
-        this.cues.push({ type: 'report', kind: d.kind })
+        this.cues.push({ type: 'report', kind: d.kind, level: d.level ?? rule.level })
       }
       this.say('boss', `boss.danger.${d.kind}`, rule.severity === 'minor' ? 'normal' : 'rage')
     }
@@ -304,15 +339,27 @@ class Run {
     }
   }
 
-  finish(at: number): void {
-    const remaining = remainingMs(this.settings, at)
+  finish(input: Extract<DramaInput, { type: 'finish' }>): void {
+    const remaining = remainingMs(this.settings, this.effectiveAt(input.at))
+    const key = (k: string) => input.replace?.[k] ?? k
+    const onTime = remaining === null || remaining >= 0
     if (remaining !== null && remaining > 0) {
       const { min, max } = DRAMA.mood.earlyFinish
       const ratio = remaining / ((this.settings.deadlineSec as number) * 1000)
       this.mood(Math.round(min + (max - min) * ratio))
-      this.say('boss', 'boss.earlyFinish', 'normal')
     }
-    const rank = this.rank(remaining === null || remaining >= 0)
+    // ランクより先に、物語の結末を見せる（docs/06 §7 の「余韻」）
+    const reported = this.s.reports.length > 0 && this.settings.cast.includes('senpai')
+    if (reported) {
+      this.say('senpai', key('ending.afterReport'), 'normal')
+    } else if (onTime) {
+      this.say('boss', key('ending.onTime'), 'normal')
+      this.say('kouhai', key('ending.thanks'), 'normal')
+    } else {
+      this.say('boss', key('ending.late'), 'normal')
+    }
+    if (!reported) for (const e of input.epilogue ?? []) this.say(e.from, e.key, 'normal')
+    const rank = this.rank(onTime)
     const slow = this.settings.untimed
     this.s.finished = { rank, slow }
     this.cues.push({ type: 'rank', rank, slow })

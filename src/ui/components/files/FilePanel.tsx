@@ -1,6 +1,6 @@
 import { type FormEvent, useState } from 'react'
 import type { FileState } from '../../../engine/index.ts'
-import { useFreeMode } from '../../store/freeMode.ts'
+import { usePlay } from '../../play/PlayContext.tsx'
 
 const MARK: Record<
   FileState['worktree'],
@@ -22,10 +22,7 @@ const MARK: Record<
 }
 
 export function FilePanel({ files, folder }: { files: FileState[]; folder: string }) {
-  const selected = useFreeMode((s) => s.selectedFile)
-  const select = useFreeMode((s) => s.selectFile)
-  const createFile = useFreeMode((s) => s.createFile)
-  const removeFile = useFreeMode((s) => s.removeFile)
+  const { selectedFile: selected, selectFile: select, createFile, removeFile } = usePlay()
   const [creating, setCreating] = useState(false)
   const [name, setName] = useState('')
   const [error, setError] = useState('')

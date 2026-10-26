@@ -83,6 +83,36 @@ describe('detectDangers', () => {
     expect(kinds(run(w, 'git commit -m 修正'))).toEqual(['BAD_COMMIT_MESSAGE'])
   })
 
+  it('コンフリクトの印のままコミットすると Lv2、そのまま push すると Lv3', () => {
+    let w = runBeat(cloned(), beat('kouhai-readme'), TEAM_ACTORS, now).world
+    w = writeFile(w, me, 'README.md', '# 自分の書き換え\n')
+    w = run(w, "git commit -am 'READMEを書き換え'").world
+    w = run(w, 'git pull --no-rebase').world
+    w = run(w, 'git add .').world
+    const committed = run(w, 'git commit --no-edit')
+    expect(committed.dangers).toEqual([
+      { kind: 'CONFLICT_MARKER_COMMITTED', allowed: false, detail: 'README.md' },
+    ])
+    expect(run(committed.world, 'git push').dangers).toContainEqual({
+      kind: 'CONFLICT_MARKER_COMMITTED',
+      allowed: false,
+      detail: 'README.md',
+      level: 3,
+    })
+  })
+
+  it('まだコミットしていない変更を reset --hard や checkout . で消すと危険。ファイル指定なら危険ではない', () => {
+    const draft = '書きかけ\n'
+    let w = writeFile(cloned(), me, 'README.md', draft)
+    expect(kinds(run(w, 'git checkout -- README.md'))).toEqual([])
+    w = writeFile(w, me, 'README.md', draft)
+    expect(kinds(run(w, 'git checkout .'))).toEqual(['UNCOMMITTED_CHANGES_DISCARDED'])
+    expect(kinds(run(w, 'git reset --hard'))).toEqual(['UNCOMMITTED_CHANGES_DISCARDED'])
+    // add 済みの内容は、オブジェクトとして残っているので「消えた」とはみなさない
+    w = run(w, 'git add README.md').world
+    expect(kinds(run(w, 'git reset --hard'))).toEqual([])
+  })
+
   it('シナリオが許可した危険は allowed になる', () => {
     let w = runBeat(cloned(), beat('kouhai-readme'), TEAM_ACTORS, now).world
     w = run(w, 'git commit --allow-empty -m 自分の作業').world
@@ -152,7 +182,7 @@ describe('エンジンと演出エンジンを通しで動かす', () => {
       'git push --force',
     ])
     expect(state.mood).toBe(5)
-    expect(cues).toContainEqual({ type: 'report', kind: 'FORCE_PUSH_OVERWROTE' })
+    expect(cues).toContainEqual({ type: 'report', kind: 'FORCE_PUSH_OVERWROTE', level: 4 })
     expect(cues).toContainEqual({ type: 'cutin', who: 'boss', variant: 'rage' })
   })
 })

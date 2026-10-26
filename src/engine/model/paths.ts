@@ -53,3 +53,10 @@ export function emptyGitDir(branch: string, bare: boolean): GitDir {
     detachedAt: null,
   }
 }
+
+/** 空のフォルダを足す（mkdir 相当）。world は Immer の draft でもよい。キーは絶対パス */
+export function addWorkspaceTo(world: World, path: string): void {
+  const abs = resolvePath('/', path)
+  if (findWorkspace(world, abs)) return
+  world.workspaces[abs] = { path: abs, files: dict(), git: null }
+}

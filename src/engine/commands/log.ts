@@ -91,7 +91,7 @@ export function log(cmd: Cmd, argv: string[]): void {
 }
 
 /** タブを、行頭から数えて8桁ごとの位置までの空白にする */
-function expandTabs(line: string): string {
+export function expandTabs(line: string): string {
   let out = ''
   for (const ch of line) out += ch === '\t' ? ' '.repeat(8 - (out.length % 8)) : ch
   return out

@@ -7,7 +7,8 @@ import { branch } from './commands/branch.ts'
 import { clone } from './commands/clone.ts'
 import { commit } from './commands/commit.ts'
 import { config } from './commands/config.ts'
-import { type Cmd, type CommandResult, Exit, unsupported } from './commands/context.ts'
+import { type Cmd, type CommandResult, Exit, fail, unsupported } from './commands/context.ts'
+import { diff, show } from './commands/diff.ts'
 import { fetch } from './commands/fetch.ts'
 import { init } from './commands/init.ts'
 import { log } from './commands/log.ts'
@@ -15,14 +16,17 @@ import { merge } from './commands/merge.ts'
 import { pull } from './commands/pull.ts'
 import { push } from './commands/push.ts'
 import { remote } from './commands/remote.ts'
+import { reset } from './commands/reset.ts'
+import { restore } from './commands/restore.ts'
+import { mv, rm } from './commands/rm.ts'
 import { shell } from './commands/shell.ts'
 import { status } from './commands/status.ts'
 import { checkoutCmd, switchCmd } from './commands/switch.ts'
 import type { GitEvent } from './events.ts'
 import { copyDict, dict, own } from './model/dict.ts'
-import { findWorkspace, resolvePath } from './model/paths.ts'
+import { addWorkspaceTo, findWorkspace, resolvePath } from './model/paths.ts'
 import type { ExecContext, FilePath, GitDir, Workspace, World } from './model/types.ts'
-import { tokenize } from './parser/tokenize.ts'
+import { type Redirect, tokenize } from './parser/tokenize.ts'
 
 export type { CommandResult } from './commands/context.ts'
 export type { GitEvent, PushRejectReason, RefUpdate } from './events.ts'
@@ -42,6 +46,12 @@ const GIT_COMMANDS: Record<string, (cmd: Cmd, argv: string[]) => void> = {
   switch: switchCmd,
   checkout: checkoutCmd,
   merge,
+  restore,
+  reset,
+  diff,
+  show,
+  rm,
+  mv,
   config,
   remote,
   clone,
@@ -51,20 +61,7 @@ const GIT_COMMANDS: Record<string, (cmd: Cmd, argv: string[]) => void> = {
 }
 
 /** 本物のgitにはあるが、まだ実装していないサブコマンド（docs/05 §3） */
-const PLANNED = new Set([
-  'rm',
-  'mv',
-  'diff',
-  'show',
-  'restore',
-  'reset',
-  'revert',
-  'reflog',
-  'stash',
-  'rebase',
-  'cherry-pick',
-  'tag',
-])
+const PLANNED = new Set(['revert', 'reflog', 'stash', 'rebase', 'cherry-pick', 'tag'])
 
 export interface ExecuteResult extends CommandResult {
   world: World
@@ -121,11 +118,8 @@ export function writeFile(world: World, workspace: string, path: FilePath, conte
 
 /** 空のディレクトリを作る（mkdir 相当）。キーはパスそのもの */
 export function addWorkspace(world: World, path: string): World {
-  const abs = resolvePath('/', path)
-  if (findWorkspace(world, abs)) return world
-  return produce(world, (draft) => {
-    draft.workspaces[abs] = { path: abs, files: dict(), git: null }
-  })
+  if (findWorkspace(world, path)) return world
+  return produce(world, (draft) => addWorkspaceTo(draft, path))
 }
 
 export function deleteFile(world: World, workspace: string, path: FilePath): World {
@@ -173,10 +167,12 @@ function executeLine(world: World, input: string, ctx: ExecContext): ExecuteResu
       } catch (e) {
         if (e instanceof Exit && !e.rollback) {
           exitCode = e.code
+          if (tokens.redirect) writeRedirect(cmd, tokens.redirect)
           return
         }
         throw e
       }
+      if (tokens.redirect) writeRedirect(cmd, tokens.redirect)
     })
   } catch (e) {
     if (!(e instanceof Exit)) throw e
@@ -186,6 +182,26 @@ function executeLine(world: World, input: string, ctx: ExecContext): ExecuteResu
   }
   const result = finish(next, out, err, exitCode, events, isUnsupported)
   return cwd !== undefined && cwd !== ctx.workspace ? { ...result, cwd } : result
+}
+
+/** echo hello > a.txt のように、標準出力をファイルに書く（>> なら追記） */
+function writeRedirect(cmd: Cmd, redirect: Redirect): void {
+  const path = resolvePath('/', redirect.path).slice(1)
+  const files = Object.keys(cmd.ws.files)
+  if (path === '' || files.some((f) => f.startsWith(`${path}/`))) {
+    fail(cmd, `bash: ${redirect.path}: Is a directory`, 1)
+  }
+  if (path === '.git' || path.startsWith('.git/')) {
+    fail(cmd, `git-sensei: .git の中には書き込めません`, 1)
+  }
+  const dir = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : ''
+  if (dir !== '' && !files.some((f) => f.startsWith(`${dir}/`))) {
+    fail(cmd, `bash: ${redirect.path}: No such file or directory`, 1)
+  }
+  const text = cmd.out.length > 0 ? `${cmd.out.join('\n')}\n` : ''
+  const before = redirect.append ? (own(cmd.ws.files, path) ?? '') : ''
+  cmd.ws.files[path] = before + text
+  cmd.out.length = 0
 }
 
 function run(cmd: Cmd, argv: string[]): void {

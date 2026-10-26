@@ -10,7 +10,10 @@ describe('complete', () => {
 
   it('サブコマンド', () => {
     expect(complete('git com', names)).toEqual({ input: 'git commit ', candidates: [] })
-    expect(complete('git s', names)).toEqual({ input: 'git s', candidates: ['status', 'switch'] })
+    expect(complete('git s', names)).toEqual({
+      input: 'git s',
+      candidates: ['show', 'status', 'switch'],
+    })
   })
 
   it('ブランチ名は共通部分まで補い、候補を返す', () => {

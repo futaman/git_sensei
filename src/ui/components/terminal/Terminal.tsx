@@ -1,6 +1,7 @@
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { completionNames, fileStates, own, repoView, serverPaths } from '../../../engine/index.ts'
-import { promptFor, type TerminalLine, useFreeMode } from '../../store/freeMode.ts'
+import { usePlay } from '../../play/PlayContext.tsx'
+import { promptFor, type TerminalLine } from '../../store/freeMode.ts'
 import { suggestChips } from './chips.ts'
 import { complete } from './completion.ts'
 
@@ -26,11 +27,7 @@ function lineClass(line: TerminalLine): string {
 }
 
 export function Terminal() {
-  const lines = useFreeMode((s) => s.lines)
-  const history = useFreeMode((s) => s.history)
-  const world = useFreeMode((s) => s.world)
-  const cwd = useFreeMode((s) => s.cwd)
-  const run = useFreeMode((s) => s.run)
+  const { lines, history, world, cwd, home, run, chips: scenarioChips, locked } = usePlay()
 
   const [input, setInput] = useState('')
   const [candidates, setCandidates] = useState<string[]>([])
@@ -40,6 +37,7 @@ export function Terminal() {
 
   const ws = own(world.workspaces, cwd)
   const chips = useMemo(() => {
+    if (scenarioChips) return scenarioChips
     if (!ws) return []
     const children = Object.values(world.workspaces)
       .filter((w) => w.git && !w.git.bare && w.path.startsWith(`${ws.path}/`))
@@ -52,7 +50,7 @@ export function Terminal() {
       servers: serverPaths(world),
       clonedChildren: children,
     })
-  }, [ws, world])
+  }, [ws, world, scenarioChips])
 
   // 出力や補完候補が増えたら最下部までスクロールする（依存は「増えた」きっかけとして使う）
   // biome-ignore lint/correctness/useExhaustiveDependencies: 上のとおり
@@ -61,6 +59,7 @@ export function Terminal() {
   }, [lines, candidates])
 
   const submit = () => {
+    if (locked) return
     run(input)
     setInput('')
     setCandidates([])
@@ -133,7 +132,7 @@ export function Terminal() {
         ))}
         <div className="flex items-center">
           <label htmlFor="terminal-input" className="mr-2 shrink-0 text-emerald-400">
-            {promptFor(world, cwd)}
+            {promptFor(world, cwd, home)}
           </label>
           <input
             id="terminal-input"
@@ -144,6 +143,7 @@ export function Terminal() {
               setCandidates([])
             }}
             onKeyDown={onKeyDown}
+            disabled={locked}
             spellCheck={false}
             autoComplete="off"
             autoCapitalize="off"

@@ -5,9 +5,12 @@ import type { DramaSettings } from './types.ts'
 export function clockText(
   settings: Pick<DramaSettings, 'clockStart' | 'clockScale'>,
   at: number,
+  /** コマンドの所要時間などで飛んだ作中の秒（DramaState.extraClockSec） */
+  extraSec = 0,
 ): string {
   const [h = 0, m = 0] = (settings.clockStart ?? '09:00').split(':').map(Number)
-  const seconds = h * 3600 + m * 60 + Math.floor((at / 1000) * (settings.clockScale ?? 1))
+  const seconds =
+    h * 3600 + m * 60 + Math.floor((at / 1000) * (settings.clockScale ?? 1)) + extraSec
   const hh = Math.floor(seconds / 3600)
   const mm = Math.floor((seconds % 3600) / 60)
   return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`

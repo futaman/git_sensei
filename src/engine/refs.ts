@@ -99,7 +99,7 @@ export function setUpstream(
 }
 
 /**
- * リビジョン指定を解決する。対応：HEAD, @, ブランチ名, origin/main, origin, refs/...,
+ * リビジョン指定を解決する。対応：HEAD, @, ORIG_HEAD, MERGE_HEAD, ブランチ名, origin/main, origin, refs/...,
  * 16進の前方一致（4桁以上）, @{u}, 後ろに続く ~n, ^, ^n
  */
 export function resolveRevision(git: GitDir, spec: string): Oid | null {
@@ -130,6 +130,8 @@ export function resolveRevision(git: GitDir, spec: string): Oid | null {
 
 function resolveBase(git: GitDir, base: string): Oid | null {
   if (base === 'HEAD' || base === '@') return headOid(git)
+  if (base === 'ORIG_HEAD') return git.origHead ?? null
+  if (base === 'MERGE_HEAD') return git.merge?.head ?? null
   // git と同じ順で探す：refs/<名前>, refs/heads/, refs/remotes/, refs/remotes/<名前>/HEAD
   for (const ref of [`refs/${base}`, branchRef(base), REMOTES + base, `${REMOTES}${base}/HEAD`]) {
     const oid = readRef(git, ref)

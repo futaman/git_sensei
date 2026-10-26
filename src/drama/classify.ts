@@ -6,7 +6,10 @@ import type { Category, DangerSignal, DramaState } from './types.ts'
 export function isObservation(command: string): boolean {
   const [program, sub, ...rest] = tokenizeLoosely(command)
   if (program === undefined) return true
-  if (program !== 'git') return ['ls', 'pwd', 'cat'].includes(program)
+  if (program !== 'git') {
+    // echo は、ファイルに書かなければ見るだけ
+    return ['ls', 'pwd', 'cat'].includes(program) || (program === 'echo' && !command.includes('>'))
+  }
   const args = rest.filter((a) => !a.startsWith('-'))
   switch (sub) {
     case 'status':
@@ -49,9 +52,11 @@ export interface ClassifyInput {
 export function classify(state: DramaState, input: ClassifyInput): Category {
   if (input.dangers.some((d) => !d.allowed)) return 'danger'
   if (input.unsupported) return 'unsupported'
+  // シナリオが目標に届いたと判定したなら、終了コードが0でなくても前進
+  // （pull でコンフリクトが起きると、本物の git も 1 を返すが、それは狙いどおりの結果）
+  if (input.milestones.length > 0) return 'progress'
   if (input.exitCode !== 0) return 'error'
   if (isObservation(input.command)) return 'observe'
-  if (input.milestones.length > 0) return 'progress'
   if (input.stateHash === state.lastHash) return 'noop'
   if (state.visited[input.stateHash]) {
     // 直前のミス（エラーや危険）をすぐ打ち消したのなら、後退ではない

@@ -189,6 +189,7 @@ export function threeWayMerge(
 
   const branch = currentBranch(git)
   if (result.conflicts.length > 0) {
+    git.origHead = head
     git.merge = {
       head: target,
       message: `${message}\n# Conflicts:\n${result.conflicts.map((c) => `#\t${c.path}\n`).join('')}`,
@@ -205,6 +206,7 @@ export function threeWayMerge(
 
   const tree = writeTree(git, git.index)
   const now = signatureNow(cmd)
+  git.origHead = head
   const oid = writeObject(git, {
     type: 'commit',
     tree,
@@ -262,6 +264,7 @@ export function fastForward(cmd: Cmd, git: GitDir, head: Oid, target: Oid): bool
     cmd.err.push(...switchErrorLines(result, 'merge'))
     return false
   }
+  git.origHead = head
   if (git.head.type === 'symbolic') git.refs[git.head.ref] = target
   else git.head = { type: 'detached', oid: target }
 

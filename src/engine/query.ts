@@ -3,7 +3,7 @@ import { subjectOf } from './commands/commit.ts'
 import { has, own } from './model/dict.ts'
 import { findWorkspace, resolvePath } from './model/paths.ts'
 import type { FilePath, GitDir, Oid, Workspace, World } from './model/types.ts'
-import { abbrev, commitTree, readCommit } from './objects/store.ts'
+import { abbrev, commitTree, readBlob, readCommit } from './objects/store.ts'
 import { currentBranch, HEADS, headOid, listRemotes, REMOTES } from './refs.ts'
 import { aheadBehind, commitsOnlyIn } from './remote/transfer.ts'
 import { computeStatus } from './worktree/status.ts'
@@ -265,4 +265,17 @@ export function remoteRepository(world: World, workspace: string, remote: string
   const url = ws?.git ? own(ws.git.config, `remote.${remote}.url`) : undefined
   if (!ws || !url) return null
   return findWorkspace(world, resolvePath(ws.path, url))?.[1].git ?? null
+}
+
+/** コミット時点のファイルの内容（パス → 中身） */
+export function commitFileContents(git: GitDir, oid: Oid): Record<FilePath, string> {
+  const tree = commitTree(git, oid)
+  return Object.fromEntries(
+    Object.entries(tree).map(([path, e]) => [path, readBlob(git, e.oid).content]),
+  )
+}
+
+/** コンフリクトの印（<<<<<<< と >>>>>>>）が残っているか */
+export function hasConflictMarkers(content: string): boolean {
+  return /^<{7}( |$)/m.test(content) && /^>{7}( |$)/m.test(content)
 }

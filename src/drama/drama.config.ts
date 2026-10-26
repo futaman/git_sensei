@@ -1,5 +1,5 @@
 // 演出の数値（docs/04）。すべて仮の値で、遊んでから調整する（docs/04 §9）。
-import type { DangerKind, MoodStage, Severity, TrustStage } from './types.ts'
+import type { DangerKind, MoodStage, Severity, TrustStage, YabaLevel } from './types.ts'
 
 export const DRAMA = {
   trust: {
@@ -45,15 +45,20 @@ export const DRAMA = {
     /** 期限より早く解決したとき、残り時間の割合に応じて加える最小・最大 */
     earlyFinish: { min: 5, max: 15 },
   },
+  /**
+   * 危険の重さ（機嫌の減り方）と、ヤバ度の既定（docs/06 §2.1 の対応表）。
+   * ヤバ度は1件ごとのラベルで、広がり方（push 済みか など）によってシナリオ側が上げてよい
+   */
   dangers: {
-    SECRET_PUSHED: { severity: 'fatal', mood: -50 },
-    FORCE_PUSH_OVERWROTE: { severity: 'fatal', mood: -45 },
-    UNCOMMITTED_CHANGES_DISCARDED: { severity: 'fatal', mood: -30 },
-    DIRECT_PUSH_TO_PROTECTED: { severity: 'major', mood: -25 },
-    HISTORY_REWRITTEN_ON_SHARED_BRANCH: { severity: 'major', mood: -20 },
-    BAD_COMMIT_MESSAGE: { severity: 'minor', mood: -5 },
-    JUNK_STAGED: { severity: 'minor', mood: -5 },
-  } satisfies Record<DangerKind, { severity: Severity; mood: number }>,
+    SECRET_PUSHED: { severity: 'fatal', mood: -50, level: 5 },
+    FORCE_PUSH_OVERWROTE: { severity: 'fatal', mood: -45, level: 4 },
+    UNCOMMITTED_CHANGES_DISCARDED: { severity: 'fatal', mood: -30, level: 3 },
+    DIRECT_PUSH_TO_PROTECTED: { severity: 'major', mood: -25, level: 3 },
+    HISTORY_REWRITTEN_ON_SHARED_BRANCH: { severity: 'major', mood: -20, level: 4 },
+    CONFLICT_MARKER_COMMITTED: { severity: 'minor', mood: -10, level: 2 },
+    BAD_COMMIT_MESSAGE: { severity: 'minor', mood: -5, level: 1 },
+    JUNK_STAGED: { severity: 'minor', mood: -5, level: 1 },
+  } satisfies Record<DangerKind, { severity: Severity; mood: number; level: YabaLevel }>,
   idle: {
     /** この時間（ミリ秒）手が止まると後輩に「…」が出る（減点なし） */
     noticeMs: 20_000,

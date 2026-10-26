@@ -30,6 +30,10 @@ export type DangerKind =
   | 'HISTORY_REWRITTEN_ON_SHARED_BRANCH'
   | 'BAD_COMMIT_MESSAGE'
   | 'JUNK_STAGED'
+  | 'CONFLICT_MARKER_COMMITTED'
+
+/** ヤバ度（docs/06 §2.1）。1件のやらかしの大きさのラベル。ゲージではない */
+export type YabaLevel = 1 | 2 | 3 | 4 | 5
 
 export type Severity = 'fatal' | 'major' | 'minor'
 
@@ -39,6 +43,8 @@ export interface DangerSignal {
   allowed: boolean
   /** 画面に出す補足（どのファイル、誰のコミットなど） */
   detail?: string
+  /** ヤバ度。省略すると種類ごとの既定（drama.config.ts） */
+  level?: YabaLevel
 }
 
 /** 演出エンジンへの入力。at はシナリオ開始からの経過ミリ秒（docs/04 §8.3） */
@@ -55,15 +61,31 @@ export type DramaInput =
       /** このコマンドで新たに満たしたマイルストーンの id */
       milestones: string[]
       dangers: DangerSignal[]
+      /** このコマンドにかかった作中の時間（秒）。時計がその分だけ飛ぶ（docs/06 §2.2） */
+      durationSec?: number
     }
   /** チャットで選んだ git 以外の行動（docs/04 §6） */
   | { type: 'choice'; at: number; id: string }
-  /** ヒントを見た */
-  | { type: 'hint'; at: number }
+  /** ヒントを見た。durationSec だけ作中の時計が飛ぶ */
+  | { type: 'hint'; at: number; durationSec?: number }
+  /** シナリオが決めた場面で、セリフを出す（間違った解消への反応など）。信頼・機嫌も動かせる */
+  | { type: 'note'; at: number; from: Character; key: string; trust?: number; mood?: number }
   /** 時間の経過を知らせる（手が止まったときの反応や期限に使う） */
-  | { type: 'tick'; at: number }
+  | {
+      type: 'tick'
+      at: number
+      /** 先輩の助け舟で言うセリフの key。シナリオが状態を見て決める（間違えた後など）。なければ senpai.idle */
+      helperKey?: string
+    }
   /** ゴールを満たした。ランクを決める */
-  | { type: 'finish'; at: number }
+  | {
+      type: 'finish'
+      at: number
+      /** 結末のセリフの差し替え（key → key）。シナリオが、遊び方に合わせて変える */
+      replace?: Record<string, string>
+      /** 結末の最後に足すセリフ。始末書があるときは出さない（ending.afterReport を優先する） */
+      epilogue?: { from: Character; key: string }[]
+    }
 
 export type Rank = 'S' | 'A' | 'B' | 'C' | 'D'
 
@@ -82,7 +104,9 @@ export type Cue =
   | { type: 'shake'; intensity: 1 | 2 | 3 }
   | { type: 'typing'; who: Character; vanish: boolean }
   /** 始末書を初めて手に入れた（docs/04 §5） */
-  | { type: 'report'; kind: DangerKind }
+  | { type: 'report'; kind: DangerKind; level: YabaLevel }
+  /** 作中の時計が飛んだ（所要時間のあるコマンドやヒント）。画面は数字を早送りで回す */
+  | { type: 'clock'; jumpedSec: number; extraSec: number }
   | { type: 'deadline'; level: 'warning' | 'urgent' | 'over' }
   | { type: 'gauge'; trust: number; mood: number; trustDelta: number; moodDelta: number }
   | { type: 'rank'; rank: Rank; slow: boolean }
@@ -106,6 +130,8 @@ export interface DramaSettings {
   smartMoves?: { id: string; pattern: string }[]
   /** チャットの選択肢の効果 */
   choices?: { id: string; trust?: number; mood?: number }[]
+  /** 手が止まったときに先輩が助け舟を出す（序盤の章）。先輩が cast にいるときだけ */
+  idleHelper?: boolean
   /** つぶやきの選び方を決める乱数の種（同じ種なら同じ演出） */
   seed: number
   /** セリフの差し替え（key → 候補） */
@@ -135,6 +161,10 @@ export interface DramaState {
   /** 使ったスマート解（同じものでは何度も加点しない） */
   smartUsed: Record<string, true>
   lastActivityAt: number
+  /** コマンドやヒントの所要時間で、作中の時計が飛んだ合計（秒） */
+  extraClockSec: number
+  /** 先輩の助け舟を何回出したか */
+  helperHints: number
   /** 手が止まったときの反応を何回出したか */
   idleStrikes: number
   idleNoticed: boolean
