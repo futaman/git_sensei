@@ -1,12 +1,10 @@
 import { useState } from 'react'
-import { FRIDAY_PUSH } from '../../scenarios/friday-push/scenario.ts'
+import { CHAPTERS } from '../../scenarios/catalog.ts'
 import { FreeModeScreen } from '../play/FreeModeScreen.tsx'
 import { MenuScreen } from '../play/MenuScreen.tsx'
 import { StageScreen } from '../stage/StageScreen.tsx'
 import { useStage } from '../store/stage.ts'
 import { ErrorBoundary } from './ErrorBoundary.tsx'
-
-const STAGES = [FRIDAY_PUSH]
 
 type Screen = 'menu' | 'free' | 'stage'
 
@@ -23,7 +21,7 @@ export function App() {
     <ErrorBoundary>
       {screen === 'menu' && (
         <MenuScreen
-          stages={STAGES}
+          chapters={CHAPTERS}
           onStage={(def) => {
             load(def)
             setScreen('stage')

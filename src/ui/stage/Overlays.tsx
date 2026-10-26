@@ -1,6 +1,7 @@
 // ステージの上に重ねるもの：導入、カットイン、始末書、結果、雷、push の動き。
 import { useEffect, useMemo, useState } from 'react'
 import { clockText, type DangerKind } from '../../drama/index.ts'
+import { GENERIC_REPORTS } from '../../scenarios/reports.ja.ts'
 import type { StageProgress } from '../../scenarios/stage.ts'
 import { now } from '../store/freeMode.ts'
 import { useStage } from '../store/stage.ts'
@@ -155,7 +156,7 @@ export function ReportModal() {
   const showReport = useStage((s) => s.showReport)
   const rollback = useStage((s) => s.rollback)
   if (!def || !open || cutin) return null
-  const text = def.reports[open]
+  const text = def.reports[open] ?? GENERIC_REPORTS[open]
   const level = reports.find((r) => r.kind === open)?.level ?? 1
   return (
     <div className="fixed inset-0 z-40 grid place-items-center bg-slate-900/50 p-4">
@@ -196,7 +197,7 @@ export function ReportModal() {
                 onClick={() => showReport(r.kind as DangerKind)}
                 className={`rounded border px-2 py-0.5 text-[11px] ${r.kind === open ? 'border-rose-400 bg-rose-50' : 'border-slate-300'}`}
               >
-                {def.reports[r.kind]?.title ?? r.kind}
+                {(def.reports[r.kind] ?? GENERIC_REPORTS[r.kind])?.title ?? r.kind}
               </button>
             ))}
           </div>

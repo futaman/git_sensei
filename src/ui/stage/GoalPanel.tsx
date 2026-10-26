@@ -16,7 +16,8 @@ export function GoalPanel() {
       className={`border-b px-3 py-2 ${all ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}
     >
       <h2 className={`text-[11px] font-bold ${all ? 'text-emerald-700' : 'text-amber-700'}`}>
-        ゴール（{def.mission.due} までに、ぜんぶ ✓ でクリア）
+        ゴール（{def.drama.deadlineSec !== undefined ? `${def.mission.due} までに、` : ''}ぜんぶ ✓
+        でクリア）
       </h2>
       <ul className="mt-1 space-y-1">
         {goals.map((g) => (

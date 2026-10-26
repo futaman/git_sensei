@@ -69,8 +69,18 @@ export function detectDangers(
     if (!found.has(kind)) found.set(kind, { detail, level })
   }
   /** コミットの中で、コンフリクトの印が残っているファイル */
-  const markedFile = (repo: typeof git, oid: string) =>
-    Object.entries(commitFileContents(repo, oid)).find(([, text]) => hasConflictMarkers(text))?.[0]
+  /**
+   * コミットで新しく印が入ったファイル。比べる相手（親や、push 前のリモートの先端）にもう印があったなら、
+   * 前からあったものなので数えない（矢印の残ったページを直す途中のコミットなど）
+   */
+  const markedFile = (repo: typeof git, oid: string, base: string | null | undefined) => {
+    const before = base ? commitFileContents(repo, base) : {}
+    return Object.entries(commitFileContents(repo, oid)).find(
+      ([path, text]) =>
+        hasConflictMarkers(text) &&
+        !(Object.hasOwn(before, path) && hasConflictMarkers(before[path] as string)),
+    )?.[0]
+  }
 
   for (const e of events) {
     switch (e.type) {
@@ -97,13 +107,13 @@ export function detectDangers(
             }
           }
           // 印が残ったまま push した：みんなに広がるので Lv3（docs/04_spec_scenarios §4.4）
-          const marked = markedFile(target, u.to)
+          const marked = markedFile(target, u.to, u.from)
           if (marked) flag('CONFLICT_MARKER_COMMITTED', marked, 3)
         }
         break
       }
       case 'COMMIT_CREATED': {
-        const marked = markedFile(git, e.oid)
+        const marked = markedFile(git, e.oid, e.parents[0])
         if (marked) flag('CONFLICT_MARKER_COMMITTED', marked)
         if (e.parents.length > 1) break
         const subject = commitMessage(git, e.oid).split('\n')[0]?.trim() ?? ''

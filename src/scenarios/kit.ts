@@ -309,3 +309,6 @@ export function basicChips(world: World, workspace: string): Chip[] {
 /** コンフリクトの印があるか（ファイルの中身） */
 export const marked = (content: string | undefined) =>
   content !== undefined && hasConflictMarkers(content)
+
+/** ORIG_HEAD（merge / pull / reset で動く前の HEAD）。なければ null */
+export const origHeadOf = (git: GitDir | null): string | null => git?.origHead ?? null

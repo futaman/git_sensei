@@ -36,6 +36,12 @@ describe('2-3 トップページに矢印', () => {
     expect(p.texts().at(-2)).toBe('問い合わせ 6 件／対応コスト ¥7,200')
   })
 
+  it('前から刺さっていた矢印は、直す前のコミットでも始末書にしない（新しく入れた印だけを数える）', () => {
+    const p = new Play(ARROW_TOP)
+    p.run('git commit --allow-empty -m "chore: 調査メモ"')
+    expect(p.reports()).toEqual([])
+  })
+
   it('英語のほうを残すと、田中に気づかれる（ゴールは未達）', () => {
     const p = new Play(ARROW_TOP)
     p.edit(

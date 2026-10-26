@@ -454,3 +454,52 @@ docs/06（演出の方針ガイド）の提案 2.1 と 2.2 を採用した。
   - ランクは手数のぶん自然に下がるだけで、別には減点しない（「直す」を罰しない）
   - 演出エンジンの `finish` に `replace`（結末のセリフの差し替え）と `epilogue`（最後に足すセリフ）を足した。シナリオは判定の結果を `StageEvaluation.ending` で渡す
 - 戻すコマンド（`restore --merge`、`reset --hard ORIG_HEAD`）は、ほかの取り消し系と一緒に M5 で作る
+
+## 13. ステージの量産（2026-10-27）
+
+docs/07（演出案のセッションの素材集）の「今すぐ作れる」ステージを全部作った。メニューは章ごとに並べ、ステージごとのいちばん良いランクをこの端末に残す。
+
+| 番号 | ステージ | 覚えること | 置き場所 |
+|---|---|---|---|
+| 1-1 | 入社初日、犯人は log の中 | clone、log（出力を読んで解く謎） | `src/scenarios/first-day/` |
+| 1-2 | 月曜9:55、朝会の前に | add / commit / push、`--amend`、読まれるメッセージ | `src/scenarios/monday-standup/` |
+| 1-3 | 火曜14:00、今日から main は保護 | `switch -c`、`push -u` | `src/scenarios/protected-main/` |
+| 1-4 | 金曜17:45、定時前の push | pull、コンフリクト（§12） | `src/scenarios/friday-push/` |
+| 2-1 | デモ5分前 | detached HEAD、警告のハッシュから救出 | `src/scenarios/demo-detached/` |
+| 2-2 | 先輩の force push | fetch、`--force-with-lease` の限界、報告の4つの結末 | `src/scenarios/senpai-force/` |
+| 2-3 | トップページに矢印 | 直すコミット、拒否されたら pull、損害額 | `src/scenarios/arrow-top/` |
+| 2-4 | 本日26時リリース | `rm --cached`、`--amend`、`reset --hard ORIG_HEAD` | `src/scenarios/release-26/` |
+| 2-5 | 職務経歴書 | `rm --cached` と `rm` の違い、`restore --source` | `src/scenarios/resume/` |
+| 3-2 | .env が漏れた | 履歴より先にキーを止める | `src/scenarios/env-leak/` |
+| 外伝 | やらかし道場 | 危険の図鑑、損害額、称号、役満 | `src/scenarios/dojo/` |
+
+### 13.1 ステージの仕組みに足したもの（`src/scenarios/stage.ts`）
+
+| 仕組み | 使うステージ |
+|---|---|
+| チャットの選択肢（出す条件、選び直し、信頼・機嫌の増減）と `onChoice` | 1-1 の答え、2-2 の報告、3-2 のキーの失効 |
+| 作中の時刻の出来事（`timeline` / `onTime`）：セリフ、NPC の操作、締切の変更、時間切れの結末 | 1-2 の朝会、1-3 のレビュー会の前倒し、2-1 の待機室、2-5 の部長の pull、3-2 のボットと早瀬の push |
+| コマンドの後の NPC の操作（`evaluate` が返す `world` と `npcLog`）。ターミナルに紫の行で出る | 2-3 の田中の push |
+| ヘッダーの数（`status`） | 2-1 の待機室、2-3 の問い合わせと対応コスト、2-5 の pull の進み具合、道場の損害額と称号 |
+| 結末の台本（`script`）、ランクの上限（`maxRank`）、ゴールを満たさない終わり（`end` → D） | ほぼすべて |
+| 進み具合で変わる危険の扱い（`policyFor`） | 3-2：周知してからの `--force-with-lease` を許す |
+| チェックポイントを作る危険の指定（`fatalKinds`） | 2-3：履歴の書き換えでも戻れる |
+| world だけを最初に戻す（`resetWorld`）。始末書と進み具合は残る | 道場 |
+| シナリオが使えるメモ（`progress.memo`） | 道場の役満の判定 |
+
+- 演出エンジン：話し手 `system`（お知らせ・ボット・取引先）、セリフの `{名前}` の差し込み（`{message}`、`{n}` など）、見るだけのコマンドはマイルストーンを満たしても手数に数えない、`cd` は見るだけ
+- 危険：`COMMITS_ORPHANED`（minor、Lv2）、`REPO_DELETED`（`rm -rf .git`、major、Lv5）。コンフリクトの印は、コミットや push で**新しく入れたときだけ**数える（前から刺さっていた矢印を直す途中のコミットは数えない）
+- 始末書の文は、ステージが持っていなければ共通の文（`src/scenarios/reports.ja.ts`。道場の図鑑と同じ。損害額の内訳つき）を出す
+- `https://host/path` の URL で clone できる（シミュレータの中の `/host/path` のサーバーになる）
+- ステージを作る道具：`src/scenarios/kit.ts`（world の組み立て、NPC、リポジトリの読み出し、補助チップ）。テストは `src/scenarios/play.test-helper.ts` の `Play` で、解答手順と主な分かれ道をなぞる
+
+### 13.2 素材から変えたところ
+
+- 1-1：選択肢にハッシュは出さない（ハッシュは開始時刻で変わる）。コミットの件名で選ぶ。「feat: カートに合計金額を表示」も選べるようにした。`cd` を見るだけにしたので par は 1
+- 1-2：朝会まで5分しかないので、コマンドの所要時間は20秒（エラーは40秒）。結末の「修正」の読み上げは、実際のメッセージを差し込む
+- 1-3：ゴールは feature ブランチの中身だけにした（main に push してしまっても、ブランチで出し直せばクリア。結末は「もう main に入ってるな」、ランクは C まで）
+- 2-2：おすすめの手順に fetch が入るので par は 3
+- 2-3：障害対応なので、コマンドの所要時間は30秒（エラーは1分）。結末の最後に「問い合わせ n 件／対応コスト ¥…」
+- 2-4：ゴミごと push したら、その場で終わり（翌朝の部長、ランク D）
+- 2-5：部長の pull が終わる作中8分で、そのときの origin で結末が決まる（クリアしていなければランク D）
+- 道場：役満は「おまけ」。図鑑の10枠が埋まったらクリア

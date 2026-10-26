@@ -35,6 +35,8 @@ function Clock() {
   const jump = useStage((s) => s.clockJump)
   const deadline = useStage((s) => s.deadline)
   const untimed = useStage((s) => s.untimed)
+  // 締切が途中で変わったら（レビュー会が早まった など）、変わった後の時刻を出す
+  const movedDeadline = useStage((s) => s.session?.deadlineSec)
   const [shown, setShown] = useState<number | null>(null)
 
   useEffect(() => {
@@ -65,7 +67,7 @@ function Clock() {
           ? '時間制限なし'
           : deadline === 'over'
             ? '締切を過ぎた'
-            : `締切 ${def.mission.due}`}
+            : `締切 ${movedDeadline !== undefined ? clockText(def.drama, 0, movedDeadline) : def.mission.due}`}
       </span>
     </div>
   )
