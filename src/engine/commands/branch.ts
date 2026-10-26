@@ -143,12 +143,7 @@ export function createBranch(
   if (!isValidBranchName(name)) fail(cmd, `fatal: '${name}' is not a valid branch name`)
   const ref = branchRef(name)
   if (has(git.refs, ref) && !force) fail(cmd, `fatal: a branch named '${name}' already exists`)
-  if (force && name === currentBranch(git)) {
-    fail(
-      cmd,
-      `fatal: cannot force update the branch '${name}' used by worktree at '${cmd.ws.path}'`,
-    )
-  }
+  if (force && name === currentBranch(git)) refuseCurrentBranch(cmd, name)
   const start = startPoint ?? 'HEAD'
   const oid = resolveRevision(git, start)
   if (!oid) {
@@ -164,6 +159,11 @@ export function createBranch(
     upstreamSetLine(cmd, name, remote.remote, remote.branch)
   }
   return oid
+}
+
+/** 今いるブランチを -f / -M で上書きしようとしたとき。HEAD と index・作業ツリーがずれるので断る */
+function refuseCurrentBranch(cmd: Cmd, name: string): never {
+  fail(cmd, `fatal: cannot force update the branch '${name}' used by worktree at '${cmd.ws.path}'`)
 }
 
 function deleteBranches(cmd: Cmd, git: GitDir, names: string[], force: boolean): void {
@@ -226,8 +226,9 @@ function renameBranch(cmd: Cmd, git: GitDir, positionals: string[], force: boole
   }
   if (!isValidBranchName(to)) fail(cmd, `fatal: '${to}' is not a valid branch name`)
   const toRef = branchRef(to)
-  if (has(git.refs, toRef) && !force && from !== to) {
-    fail(cmd, `fatal: a branch named '${to}' already exists`)
+  if (has(git.refs, toRef) && from !== to) {
+    if (!force) fail(cmd, `fatal: a branch named '${to}' already exists`)
+    if (to === current) refuseCurrentBranch(cmd, to)
   }
   const oid = own(git.refs, fromRef)
   delete git.refs[fromRef]
