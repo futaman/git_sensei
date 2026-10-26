@@ -46,6 +46,33 @@ export function fileStates(ws: Workspace): FileState[] {
   })
 }
 
+/**
+ * 作業ツリーに path というファイルを作るとき、ファイルとディレクトリの名前がぶつかるか。
+ * 途中のディレクトリと同じ名前のファイルがある（'d' があるのに 'd/x'）か、
+ * 同じ名前のディレクトリがある（'d/x' があるのに 'd'）ならぶつかる。
+ * clone でできたフォルダ（別のワークスペース）も、同じ名前のディレクトリとして扱う
+ */
+export type PathConflict =
+  | { kind: 'parentIsFile'; path: FilePath }
+  | { kind: 'isDirectory' }
+  | { kind: 'insideWorkspace'; name: string }
+  | null
+
+export function pathConflict(world: World, ws: Workspace, path: FilePath): PathConflict {
+  const parts = path.split('/')
+  for (let depth = 1; depth < parts.length; depth++) {
+    const parent = parts.slice(0, depth).join('/')
+    if (has(ws.files, parent)) return { kind: 'parentIsFile', path: parent }
+  }
+  const dir = `${path}/`
+  if (Object.keys(ws.files).some((p) => p.startsWith(dir))) return { kind: 'isDirectory' }
+  const first = parts[0] as string
+  if (findWorkspace(world, resolvePath(ws.path, first))) {
+    return parts.length === 1 ? { kind: 'isDirectory' } : { kind: 'insideWorkspace', name: first }
+  }
+  return null
+}
+
 export interface CommitNode {
   oid: Oid
   short: string

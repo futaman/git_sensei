@@ -10,6 +10,7 @@ import {
   type GitEvent,
   has,
   own,
+  pathConflict,
   type Workspace,
   type World,
   writeFile,
@@ -67,7 +68,8 @@ interface FreeModeState extends Stage {
   run: (input: string) => void
   runNextBeat: () => void
   editFile: (path: string, content: string) => void
-  createFile: (path: string) => void
+  /** ファイルを作って選ぶ。作れないときは理由（画面に出す文）を返す */
+  createFile: (path: string) => string | null
   removeFile: (path: string) => void
   selectFile: (path: string | null) => void
   reset: (preset?: Preset) => void
@@ -249,12 +251,24 @@ export const useFreeMode = create<FreeModeState>()(
         set((s) => ({ world: writeFile(s.world, s.cwd, path, content) }))
       },
       createFile(path) {
+        const { world } = get()
         const ws = currentWorkspace(get())
-        if (!ws || has(ws.files, path)) {
+        if (!ws) return null
+        if (has(ws.files, path)) {
           set({ selectedFile: path })
-          return
+          return null
+        }
+        // 'd' と 'd/x' を両方作ると、本物の git では作れない tree ができてしまう（検証レポート B5）
+        const conflict = pathConflict(world, ws, path)
+        if (conflict?.kind === 'parentIsFile') {
+          return `同じ名前のファイル ${conflict.path} があるので、その中にはファイルを作れません`
+        }
+        if (conflict?.kind === 'isDirectory') return `同じ名前のフォルダ ${path} があります`
+        if (conflict?.kind === 'insideWorkspace') {
+          return `${conflict.name} は別のフォルダです。cd ${conflict.name} で入ってから作ってください`
         }
         set((s) => ({ world: writeFile(s.world, s.cwd, path, ''), selectedFile: path }))
+        return null
       },
       removeFile(path) {
         set((s) => ({

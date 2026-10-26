@@ -41,7 +41,11 @@ export function FilePanel({ files, folder }: { files: FileState[]; folder: strin
       setError('ファイル名を入力してください（例 src/util.js）')
       return
     }
-    createFile(path)
+    const problem = createFile(path)
+    if (problem) {
+      setError(problem)
+      return
+    }
     setCreating(false)
     setName('')
     setError('')
