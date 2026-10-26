@@ -15,7 +15,7 @@ export const GENERIC_REPORTS: StageDefinition['reports'] = {
     cost: `${cost(0)}（でも、読んだ人の時間が減る）`,
   },
   JUNK_STAGED: {
-    title: '12,483個の荷物について',
+    title: 'node_modules を積んだことについて',
     what: 'node_modules/ をステージに載せた',
     why: '誰でも npm install で作れるものを、リポジトリに入れると重くなる。差分も読めなくなる',
     howToFix: 'git rm -r --cached node_modules で外す',
@@ -52,7 +52,7 @@ export const GENERIC_REPORTS: StageDefinition['reports'] = {
   },
   HISTORY_REWRITTEN_ON_SHARED_BRANCH: {
     title: 'みんなの過去を書き換えたことについて',
-    what: '田中と共有している shared ブランチを、amend と force push で書き換えた',
+    what: 'ほかの人も使っているブランチを、amend や reset と force push で書き換えた',
     why: '共有ブランチを書き換えると、ほかの人の手元の履歴と食い違い、次の pull で混乱する',
     howToFix: '書き換えたことを伝え、相手に fetch して合わせてもらう',
     prevention: '共有ブランチは書き換えない。直すコミットを足す',
@@ -61,9 +61,10 @@ export const GENERIC_REPORTS: StageDefinition['reports'] = {
   },
   FORCE_PUSH_OVERWROTE: {
     title: '仲間の仕事を、なかったことにしたことについて',
-    what: 'fetch せずに git push --force して、origin にあった田中のコミットを消した',
+    what: 'fetch せずに git push --force して、origin にあったほかの人のコミットを消した',
     why: '自分が知らないコミットごと、origin を上書きした。消された本人は気づかないこともある',
-    howToFix: '田中の手元にコミットが残っていれば、push し直してもらう',
+    howToFix:
+      '消された人の手元にはコミットが残っている。push し直してもらい、自分は pull してから push する',
     prevention: '拒否されたら pull。上書きが要るときは --force-with-lease',
     bossWord: '押し切るな',
     cost: `作業のやり直しと信頼 ${cost(4200000)}`,
@@ -93,7 +94,7 @@ export const GENERIC_REPORTS: StageDefinition['reports'] = {
     howToFix:
       'clone し直せば、origin にあるものは戻る。push していなかったコミットやブランチは戻らない',
     prevention: '.git には触らない。困ったら消す前に、誰かに聞く',
-    bossWord: '….git ごと消したのか',
+    bossWord: '…家ごと、か',
     cost: '測定不能',
   },
 }

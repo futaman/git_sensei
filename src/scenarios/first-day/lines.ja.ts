@@ -43,7 +43,7 @@ export const LINES: Record<string, string[]> = {
   'hint.cd': ['clone したら shop-app ってフォルダができてる。cd shop-app'],
   'hint.log': ['git log。Author と Date をよく見てみ'],
   'hint.answer': ['18時より後のコミットは2つ。README だけのほうは、合計を壊せないよね'],
-  'milestone.cloned': ['わ、全部来た'],
+  'milestone.cloned': ['わ、全部来ました'],
   'milestone.sawLog': ['（コミットが5個…）'],
   'kouhai.observeLoop': ['…迷ってます？', '（さっきと同じ画面だ）'],
   'kouhai.oneline': ['（--oneline だと、誰が書いたか見えないんだ）'],

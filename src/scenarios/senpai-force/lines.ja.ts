@@ -44,7 +44,7 @@ export const LINES: Record<string, string[]> = {
   ],
   'senpai.leaseStopped': ['お、lease が止めてくれたね'],
   'kouhai.upToDate': ['え、同じって出てますけど…？'],
-  'kouhai.askMerge': ['先輩、マージコミットができました。これで両方ですか？'],
+  'kouhai.askMerge': ['先輩、マージコミットができてます。これで両方入ったんですか？'],
   'kouhai.observeBeforeDanger': ['確認してから打つんですね'],
   'kouhai.danger': ['…先輩、それ、やり返してません？'],
   'boss.danger.FORCE_PUSH_OVERWROTE': ['force push の応酬をするな'],
@@ -65,7 +65,7 @@ export const CHOICES = [
     text: '消えてたので、マージして戻しておきました。次は --force-with-lease でお願いします',
     trust: 5,
   },
-  { id: 'report.fact', text: '先輩の --force で、僕のコミットが消えてました' },
+  { id: 'report.fact', text: '先輩の --force で、クーポンの修正が消えてました' },
   { id: 'report.silent', text: '（何も言わない）' },
   { id: 'report.boss', text: '部長に報告します', mood: 5 },
 ]

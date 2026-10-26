@@ -56,7 +56,7 @@ export const LINES: Record<string, string[]> = {
   'ending.review': ['…ブランチ名がいい'],
   'ending.reviewCard': ['レビュー依頼：{branch} → main'],
   'ending.directPush': ['レビュー会で見るものが、もう main に入ってるな'],
-  'ending.noError': ['先輩、1回もエラー出してない…'],
+  'ending.noError': ['（先輩、1回もエラー出してない…）'],
 }
 
 export const FILES = {

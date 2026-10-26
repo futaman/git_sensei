@@ -53,7 +53,7 @@ export const LINES: Record<string, string[]> = {
   'ending.revokeLate': ['消すより先に、止めろ'],
   'ending.noRevoke.boss': ['少しお時間よろしいでしょうか'],
   'ending.noRevoke.card': ['社内報：その朝、何が起きたのか'],
-  'ending.noRevoke.senpai': ['…これが本番だったら、ね'],
+  'ending.noRevoke.senpai': ['…履歴を消しても、キーはまだ使えるんだよ'],
   'ending.taught': ['（田中のモニターに、"add の前に status" の付箋が貼られた）'],
 }
 
