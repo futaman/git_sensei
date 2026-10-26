@@ -30,6 +30,7 @@ export { has, own } from './model/dict.ts'
 export { findWorkspace, resolvePath } from './model/paths.ts'
 export type * from './model/types.ts'
 export * from './query.ts'
+export { stateHash } from './stateHash.ts'
 
 const GIT_COMMANDS: Record<string, (cmd: Cmd, argv: string[]) => void> = {
   init,

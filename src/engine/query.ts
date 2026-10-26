@@ -3,9 +3,9 @@ import { subjectOf } from './commands/commit.ts'
 import { has, own } from './model/dict.ts'
 import { findWorkspace, resolvePath } from './model/paths.ts'
 import type { FilePath, GitDir, Oid, Workspace, World } from './model/types.ts'
-import { abbrev, readCommit } from './objects/store.ts'
+import { abbrev, commitTree, readCommit } from './objects/store.ts'
 import { currentBranch, HEADS, headOid, listRemotes, REMOTES } from './refs.ts'
-import { aheadBehind } from './remote/transfer.ts'
+import { aheadBehind, commitsOnlyIn } from './remote/transfer.ts'
 import { computeStatus } from './worktree/status.ts'
 
 export interface FileState {
@@ -242,4 +242,27 @@ export function serverPaths(world: World): string[] {
     .filter((ws) => ws.git?.bare)
     .map((ws) => ws.path)
     .sort()
+}
+
+/** コミットのメッセージ */
+export function commitMessage(git: GitDir, oid: Oid): string {
+  return readCommit(git, oid).message
+}
+
+/** コミット時点のすべてのファイルのパス */
+export function commitFiles(git: GitDir, oid: Oid): FilePath[] {
+  return Object.keys(commitTree(git, oid)).sort()
+}
+
+/** to から辿れて from から辿れないコミット（push で新しく送ったコミットなど） */
+export function commitsBetween(git: GitDir, from: Oid | null, to: Oid): Oid[] {
+  return commitsOnlyIn(git, to, from)
+}
+
+/** ワークスペースに登録されたリモート（origin など）の先にあるリポジトリ。なければ null */
+export function remoteRepository(world: World, workspace: string, remote: string): GitDir | null {
+  const ws = own(world.workspaces, workspace)
+  const url = ws?.git ? own(ws.git.config, `remote.${remote}.url`) : undefined
+  if (!ws || !url) return null
+  return findWorkspace(world, resolvePath(ws.path, url))?.[1].git ?? null
 }
