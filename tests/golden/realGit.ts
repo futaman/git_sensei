@@ -19,7 +19,20 @@ export const FIXED_DATE = '2026-04-01T09:00:00+09:00'
 export const IDENTITY = { name: 'Sensei', email: 'sensei@example.com' }
 
 // 利用者の ~/.gitconfig や OS の設定に結果が左右されないようにする
+// followRemoteHEAD: git 2.48 から、fetch が origin/HEAD を自動で作るようになった（既定 create）。
+// 本物に設定を渡すと remote.origin.* があるだけで origin が「ある」ことになってしまうので、
+// 本物はそのままにし、シミュレータ側をインストールされている git のバージョンに合わせる
+export const FOLLOW_REMOTE_HEAD = 'remote.origin.followremotehead'
 const FIXED_CONFIG = ['-c', 'core.autocrlf=false', '-c', 'init.defaultBranch=main']
+
+/** インストールされている git が、fetch で origin/HEAD を作るか */
+export function gitCreatesRemoteHead(): boolean {
+  const out = spawnSync('git', ['--version'], { encoding: 'utf8' }).stdout
+  const m = /(\d+)\.(\d+)/.exec(out)
+  if (!m) return true
+  const [major, minor] = [Number(m[1]), Number(m[2])]
+  return major > 2 || (major === 2 && minor >= 48)
+}
 
 export interface ExecOutput {
   stdout: string

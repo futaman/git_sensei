@@ -12,7 +12,18 @@ import {
   type World,
   writeFile,
 } from '../../src/engine/index.ts'
-import { FIXED_DATE, IDENTITY, RealGitRepo } from './realGit.ts'
+import {
+  FIXED_DATE,
+  FOLLOW_REMOTE_HEAD,
+  gitCreatesRemoteHead,
+  IDENTITY,
+  RealGitRepo,
+} from './realGit.ts'
+
+// シミュレータを、インストールされている git と同じ fetch の動きにする（realGit.ts の説明を参照）
+const SIM_FOLLOW_REMOTE_HEAD: Record<string, string> = gitCreatesRemoteHead()
+  ? {}
+  : { [FOLLOW_REMOTE_HEAD]: 'never' }
 
 /** in を省略すると 'me'。'.' は作業場所のルート（clone を実行する場所） */
 type Where = { in?: string }
@@ -133,6 +144,7 @@ export function expectSameAsRealGit(steps: Step[]): void {
     {
       'user.name': IDENTITY.name,
       'user.email': IDENTITY.email,
+      ...SIM_FOLLOW_REMOTE_HEAD,
     },
   )
   try {

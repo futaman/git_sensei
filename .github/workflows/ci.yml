@@ -17,6 +17,8 @@ jobs:
           cache: npm
 
       - run: npm ci
+      # 突き合わせテストは本物の git と比べるので、バージョンを記録しておく
+      - run: git --version
       - name: Typecheck
         run: npm run typecheck
       - name: Lint

@@ -36,6 +36,29 @@ describe('チームで練習', () => {
     expect(run(cd.world, me, 'git log --oneline').stdout).toMatch(/プロジェクトを作成/)
   })
 
+  it('remote add の後の fetch で origin/HEAD が作られる（git 2.48 からの既定の動き）', () => {
+    const w = buildTeamWorld(now, player)
+    const r = run(
+      w,
+      TEAM_PATHS.home,
+      'git init',
+      `git remote add origin ${TEAM_PATHS.origin}`,
+      'git fetch',
+      'git branch -r',
+    )
+    expect(r.stdout).toBe('  origin/HEAD -> origin/main\n  origin/main\n')
+    const never = run(
+      w,
+      TEAM_PATHS.home,
+      'git init',
+      `git remote add origin ${TEAM_PATHS.origin}`,
+      'git config remote.origin.followRemoteHEAD never',
+      'git fetch',
+      'git branch -r',
+    )
+    expect(never.stdout).toBe('  origin/main\n')
+  })
+
   it('同僚の push を pull で受け取れる', () => {
     let w = run(
       buildTeamWorld(now, player),

@@ -87,6 +87,21 @@ export function fetchFrom(
     }
   }
 
+  // origin/HEAD がまだなければ、リモートの HEAD に合わせて作る
+  // （git 2.48 からの既定 remote.<name>.followRemoteHEAD=create。never なら作らない）
+  if (remote.name && !opts.branches) {
+    const symref = `${REMOTES}${remote.name}/HEAD`
+    const policy =
+      git.config[`remote.${remote.name}.followremotehead`] ??
+      cmd.world.globalConfig[`remote.${remote.name}.followremotehead`] ??
+      'create'
+    const remoteHead = currentBranch(remote.git)
+    const target = remoteHead ? `${REMOTES}${remote.name}/${remoteHead}` : null
+    if (policy !== 'never' && !(symref in git.symrefs) && target && target in git.refs) {
+      git.symrefs[symref] = target
+    }
+  }
+
   // git は From の行で URL の末尾の / と .git を省く
   const shown = remote.url.replace(/\/+$/, '').replace(/\.git$/, '')
   if (lines.length > 0) cmd.err.push(`From ${shown}`, ...lines)
