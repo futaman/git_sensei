@@ -11,6 +11,9 @@ gitをわかりやすく体験できる日本語のWebアプリ。職場のス�
 | [03_spec_input_and_layout.md](docs/03_spec_input_and_layout.md) | 入力方式と画面構成                         |
 | [04_spec_drama_system.md](docs/04_spec_drama_system.md)         | 演出システム（信頼・機嫌・無駄操作の判定） |
 | [05_spec_tech_stack.md](docs/05_spec_tech_stack.md)             | 技術スタックとプロジェクト構成             |
+| [06_guide_direction.md](docs/06_guide_direction.md)             | 演出とシナリオを実装するときのガイド       |
+| [07_scenario_catalog.md](docs/07_scenario_catalog.md)           | シナリオ集（章立てと各ステージの素材）     |
+| [08_spec_look_and_clarity.md](docs/08_spec_look_and_clarity.md) | 見た目と、ゲームとしてのわかりやすさ       |
 
 ## 開発
 
