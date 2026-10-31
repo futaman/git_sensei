@@ -28,7 +28,7 @@ const DEADLINE_CLASS = {
 }
 
 /** 作中の時計。時計が飛んだときは、0.6秒かけて数字を早送りで回す（docs/06 の 2.2） */
-function Clock() {
+function Clock({ compact = false }: { compact?: boolean }) {
   const def = useStage((s) => s.def)
   const at = useStage((s) => s.at)
   const extra = useStage((s) => s.session?.drama.extraClockSec ?? 0)
@@ -58,11 +58,11 @@ function Clock() {
   return (
     <div className="flex flex-col items-center leading-none" title="作中の時刻">
       <span
-        className={`font-mono text-3xl font-bold tabular-nums ${shown !== null ? 'text-sky-600' : DEADLINE_CLASS[deadline]}`}
+        className={`font-mono font-bold tabular-nums ${compact ? 'text-xl' : 'text-3xl'} ${shown !== null ? 'text-sky-600' : DEADLINE_CLASS[deadline]}`}
       >
         {text}
       </span>
-      <span className="mt-1 text-[10px] text-slate-500">
+      <span className={`mt-1 text-[10px] text-slate-500 ${compact ? 'hidden' : ''}`}>
         {untimed
           ? '時間制限なし'
           : deadline === 'over'
@@ -73,7 +73,7 @@ function Clock() {
   )
 }
 
-function KouhaiGauge() {
+function KouhaiGauge({ compact = false }: { compact?: boolean }) {
   const def = useStage((s) => s.def)
   const face = useStage((s) => s.face)
   const trust = useStage((s) => s.trust)
@@ -85,13 +85,13 @@ function KouhaiGauge() {
     <div className="flex items-center gap-2" title={`${def.names.kouhai}の信頼 ${trust}/100`}>
       <span
         key={`${face.stage}`}
-        className={`grid h-10 w-10 place-items-center rounded-full bg-sky-50 text-2xl ${face.direction === 'down' ? 'transition-opacity duration-1000' : 'stage-slide-in'}`}
+        className={`grid place-items-center rounded-full bg-sky-50 ${compact ? 'h-8 w-8 text-lg' : 'h-10 w-10 text-2xl'} ${face.direction === 'down' ? 'transition-opacity duration-1000' : 'stage-slide-in'}`}
         role="img"
-        aria-label={f.label}
+        aria-label={`${def.names.kouhai}のまなざし：${f.label}`}
       >
         {f.icon}
       </span>
-      <div className="flex flex-col">
+      <div className={`flex flex-col ${compact ? 'hidden' : ''}`}>
         <span className="text-[11px] text-slate-500">
           {def.names.kouhai}のまなざし：<span className="font-bold text-slate-800">{f.label}</span>
         </span>
@@ -116,7 +116,7 @@ function KouhaiGauge() {
   )
 }
 
-function BossGauge() {
+function BossGauge({ compact = false }: { compact?: boolean }) {
   const def = useStage((s) => s.def)
   const mood = useStage((s) => s.mood)
   const value = useStage((s) => s.moodValue)
@@ -126,13 +126,13 @@ function BossGauge() {
   return (
     <div className="flex items-center gap-2" title={`${def.names.boss}の機嫌 ${value}/100`}>
       <span
-        className={`grid h-10 w-10 place-items-center rounded-full bg-slate-100 text-2xl ring-4 ${m.ring} ${mood === 'boiling' ? 'stage-tremble' : ''}`}
+        className={`grid place-items-center rounded-full bg-slate-100 ${compact ? 'h-8 w-8 text-lg ring-2' : 'h-10 w-10 text-2xl ring-4'} ${m.ring} ${mood === 'boiling' ? 'stage-tremble' : ''}`}
         role="img"
-        aria-label={m.label}
+        aria-label={`${def.names.boss}の機嫌：${m.label}`}
       >
         {m.icon}
       </span>
-      <div className="flex flex-col">
+      <div className={`flex flex-col ${compact ? 'hidden' : ''}`}>
         <span className="text-[11px] text-slate-500">
           {def.names.boss}の機嫌：<span className="font-bold text-slate-800">{m.label}</span>
         </span>
@@ -185,7 +185,13 @@ function StatusChips() {
   )
 }
 
-export function StageHeader({ onExit }: { onExit: () => void }) {
+export function StageHeader({
+  onExit,
+  compact = false,
+}: {
+  onExit: () => void
+  compact?: boolean
+}) {
   const def = useStage((s) => s.def)
   const reports = useStage((s) => s.reports)
   const phase = useStage((s) => s.phase)
@@ -195,6 +201,82 @@ export function StageHeader({ onExit }: { onExit: () => void }) {
   const resetWorld = useStage((s) => s.resetWorld)
   if (!def) return null
   const hintMin = Math.round((def.hintSec ?? 300) / 60)
+  const confirmRestart = () => {
+    if (
+      window.confirm(
+        '最初からやり直します。リポジトリ、時計、始末書、ゲージはすべて最初の状態に戻ります。よろしいですか？',
+      )
+    )
+      restart()
+  }
+  const reportButton = reports.length > 0 && (
+    <button
+      type="button"
+      onClick={() => showReport(reports.at(-1)?.kind ?? null)}
+      className="rounded border border-rose-300 bg-rose-50 px-2 py-1 text-xs text-rose-800 hover:bg-rose-100"
+    >
+      始末書 {reports.length}
+    </button>
+  )
+
+  if (compact) {
+    // スマホ：1行に、しごと・時計・顔2つ・始末書・≡（docs/08 の 9.2）
+    return (
+      <header className="flex items-center gap-2 border-b border-slate-200 bg-white px-3 py-1.5">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-xs font-bold">{def.mission.task}</p>
+          <p className="truncate text-[10px] text-slate-500">〆 {def.mission.due}</p>
+        </div>
+        <Clock compact />
+        <KouhaiGauge compact />
+        <BossGauge compact />
+        {reportButton}
+        <details className="relative">
+          <summary
+            className="grid h-8 w-8 cursor-pointer list-none place-items-center rounded border border-slate-300 text-base"
+            aria-label="メニュー"
+          >
+            ≡
+          </summary>
+          <div className="absolute top-9 right-0 z-30 flex w-48 flex-col gap-1 rounded-lg border border-slate-200 bg-white p-2 shadow-lg">
+            <button
+              type="button"
+              onClick={hint}
+              disabled={phase !== 'playing'}
+              className="rounded bg-violet-600 px-3 py-2 text-left text-xs font-bold text-white disabled:bg-slate-300"
+            >
+              早瀬先輩に聞く（−{hintMin}分）
+            </button>
+            {def.resetWorld && (
+              <button
+                type="button"
+                onClick={resetWorld}
+                disabled={phase !== 'playing'}
+                className="rounded border border-violet-300 px-3 py-2 text-left text-xs text-violet-700 disabled:opacity-50"
+              >
+                {def.resetWorld.label}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={confirmRestart}
+              className="rounded border border-slate-300 px-3 py-2 text-left text-xs text-slate-600"
+            >
+              やり直す
+            </button>
+            <button
+              type="button"
+              onClick={onExit}
+              className="rounded border border-slate-300 px-3 py-2 text-left text-xs text-slate-600"
+            >
+              メニューへ
+            </button>
+          </div>
+        </details>
+      </header>
+    )
+  }
+
   return (
     <header className="flex items-center gap-5 border-b border-slate-200 bg-white px-4 py-2">
       <div className="min-w-0">
@@ -207,15 +289,7 @@ export function StageHeader({ onExit }: { onExit: () => void }) {
       <BossGauge />
       <StatusChips />
       <div className="ml-auto flex shrink-0 items-center gap-2">
-        {reports.length > 0 && (
-          <button
-            type="button"
-            onClick={() => showReport(reports.at(-1)?.kind ?? null)}
-            className="rounded border border-rose-300 bg-rose-50 px-2 py-1 text-xs text-rose-800 hover:bg-rose-100"
-          >
-            始末書 {reports.length}
-          </button>
-        )}
+        {reportButton}
         {def.resetWorld && (
           <button
             type="button"
@@ -238,14 +312,7 @@ export function StageHeader({ onExit }: { onExit: () => void }) {
         </button>
         <button
           type="button"
-          onClick={() => {
-            if (
-              window.confirm(
-                '最初からやり直します。リポジトリ、時計、始末書、ゲージはすべて最初の状態に戻ります。よろしいですか？',
-              )
-            )
-              restart()
-          }}
+          onClick={confirmRestart}
           title="ステージを最初からやり直します"
           className="rounded border border-slate-300 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50"
         >

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { clockText, type DangerKind } from '../../drama/index.ts'
 import { GENERIC_REPORTS } from '../../scenarios/reports.ja.ts'
 import type { StageProgress } from '../../scenarios/stage.ts'
+import { MOBILE_QUERY, useMediaQuery } from '../hooks/useMediaQuery.ts'
 import { now } from '../store/freeMode.ts'
 import { useStage } from '../store/stage.ts'
 
@@ -27,6 +28,7 @@ const CUTIN_TEXT = {
 export function IntroModal() {
   const def = useStage((s) => s.def)
   const start = useStage((s) => s.start)
+  const mobile = useMediaQuery(MOBILE_QUERY)
   const [untimed, setUntimed] = useState(false)
   // ゴールの文言だけ使う（達成の印は、遊び始めてから画面の右上に出す）
   const goals = useMemo(
@@ -35,8 +37,8 @@ export function IntroModal() {
   )
   if (!def) return null
   return (
-    <div className="fixed inset-0 z-40 grid place-items-center overflow-y-auto bg-slate-900/60 p-4">
-      <div className="stage-slide-in w-full max-w-xl rounded-lg bg-white p-6 shadow-xl">
+    <div className="fixed inset-0 z-40 grid place-items-center overflow-y-auto bg-slate-900/60 p-3 sm:p-4">
+      <div className="stage-slide-in w-full max-w-xl rounded-lg bg-white p-4 shadow-xl sm:p-6">
         <p className="text-xs font-bold text-slate-400">ストーリー</p>
         <h2 className="mt-1 text-xl font-bold">{def.title}</h2>
         <ol className="mt-4 space-y-1.5">
@@ -66,8 +68,9 @@ export function IntroModal() {
           </ul>
         </div>
         <p className="mt-4 text-xs text-slate-500">
-          下のターミナルに git のコマンドを打って進めます。ファイルは左の一覧とエディタで直せます。
-          ゴールは画面の右上に出ていて、達成するとチェックがつきます。手数が少ないほど、後輩のまなざしは輝きます。
+          {mobile
+            ? '下の「ターミナル」タブで、ボタンを押してコマンドを組み立てて進めます。ファイルは「ファイル」タブで直せます。ゴールは「チャット」タブの上に出ていて、達成するとチェックがつきます。'
+            : '下のターミナルに git のコマンドを打って進めます。ファイルは左の一覧とエディタで直せます。ゴールは画面の右上に出ていて、達成するとチェックがつきます。手数が少ないほど、後輩のまなざしは輝きます。'}
         </p>
         <label className="mt-4 flex items-center gap-2 text-xs text-slate-600">
           <input type="checkbox" checked={untimed} onChange={(e) => setUntimed(e.target.checked)} />

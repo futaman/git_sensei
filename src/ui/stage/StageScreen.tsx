@@ -1,12 +1,15 @@
 // ストーリーのステージ画面。フリーモードと同じ部品（ターミナル、ファイル、エディタ、グラフ）に、
 // 上の帯（しごと・時計・ゲージ）と右のチャット、演出の重ね物を足す。
-import { useEffect, useMemo } from 'react'
+// スマホ（docs/08 の 9.2）では、チャット／フロア／ファイル／ターミナルをタブで切り替える。
+import { useEffect, useMemo, useState } from 'react'
 import { fileStates, own, remoteSummaries, repoView } from '../../engine/index.ts'
 import { FourAreas } from '../components/areas/FourAreas.tsx'
 import { EditorPane } from '../components/editor/EditorPane.tsx'
 import { FilePanel } from '../components/files/FilePanel.tsx'
 import { CommitGraph } from '../components/graph/CommitGraph.tsx'
+import { MobileShell } from '../components/layout/MobileShell.tsx'
 import { Terminal } from '../components/terminal/Terminal.tsx'
+import { MOBILE_QUERY, useMediaQuery } from '../hooks/useMediaQuery.ts'
 import { type PlayApi, PlayProvider } from '../play/PlayContext.tsx'
 import { useStage } from '../store/stage.ts'
 import { ChatPanel } from './ChatPanel.tsx'
@@ -29,6 +32,7 @@ export function StageScreen({ onExit }: { onExit: () => void }) {
   const history = useStage((s) => s.history)
   const selectedFile = useStage((s) => s.selectedFile)
   const shake = useStage((s) => s.shake)
+  const chatLength = useStage((s) => s.chat.length)
   const tick = useStage((s) => s.tick)
   const run = useStage((s) => s.run)
   const editFile = useStage((s) => s.editFile)
@@ -36,6 +40,9 @@ export function StageScreen({ onExit }: { onExit: () => void }) {
   const removeFile = useStage((s) => s.removeFile)
   const selectFile = useStage((s) => s.selectFile)
   const load = useStage((s) => s.load)
+  const mobile = useMediaQuery(MOBILE_QUERY)
+  const [tab, setTab] = useState('chat')
+  const [seenChat, setSeenChat] = useState(0)
 
   // 時間で進むもの（時計、手が止まったときの反応、締切）のために、1秒ごとに知らせる
   useEffect(() => {
@@ -43,6 +50,11 @@ export function StageScreen({ onExit }: { onExit: () => void }) {
     const timer = setInterval(tick, 1000)
     return () => clearInterval(timer)
   }, [phase, tick])
+
+  // チャットのタブを見ているあいだは、新しい発言を「見た」ことにする
+  useEffect(() => {
+    if (tab === 'chat') setSeenChat(chatLength)
+  }, [tab, chatLength])
 
   const world = session?.world
   const cwd = session?.cwd ?? ''
@@ -60,7 +72,7 @@ export function StageScreen({ onExit }: { onExit: () => void }) {
 
   if (!session || !world) {
     return (
-      <div className="h-screen bg-slate-100">
+      <div className="h-dvh bg-slate-100">
         <IntroModal />
       </div>
     )
@@ -78,8 +90,76 @@ export function StageScreen({ onExit }: { onExit: () => void }) {
     createFile,
     removeFile,
     selectFile,
-    chips,
+    // スマホではシナリオのチップを出さず、パレットで組み立てる（docs/08 の R7）
+    chips: mobile ? undefined : chips,
     locked: phase !== 'playing',
+  }
+
+  const overlays = (
+    <>
+      <CutInOverlay />
+      <ReportModal />
+      <ThunderModal key={`thunder-${session.drama.thunder}`} onRetry={retry} />
+      <ResultPanel onRetry={retry} onExit={onExit} />
+    </>
+  )
+
+  if (mobile) {
+    return (
+      <PlayProvider value={play}>
+        <MobileShell
+          key={shake?.id}
+          className={shake ? `stage-shake-${shake.intensity}` : ''}
+          header={<StageHeader onExit={onExit} compact />}
+          active={tab}
+          onSelect={setTab}
+          tabs={[
+            {
+              key: 'chat',
+              label: 'チャット',
+              badge: chatLength > seenChat,
+              content: (
+                <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] bg-white">
+                  <GoalPanel />
+                  <ChatPanel />
+                </div>
+              ),
+            },
+            {
+              key: 'floor',
+              label: 'フロア',
+              content: (
+                <div className="grid min-h-0 grid-rows-[minmax(0,1fr)_minmax(0,1fr)]">
+                  <section className="relative min-h-0 overflow-hidden bg-white">
+                    <h2 className="sr-only">コミットグラフ</h2>
+                    <CommitGraph view={view} />
+                    <PushEffect />
+                  </section>
+                  <section className="min-h-0 overflow-x-auto border-t border-slate-200 bg-slate-50">
+                    <h2 className="sr-only">4つの領域</h2>
+                    <div className="h-full min-w-[720px]">
+                      <FourAreas hasRepo={!!ws?.git} files={files} view={view} remotes={remotes} />
+                    </div>
+                  </section>
+                </div>
+              ),
+            },
+            {
+              key: 'files',
+              label: 'ファイル',
+              content: (
+                <div className="grid min-h-0 grid-rows-[minmax(0,40%)_minmax(0,1fr)] bg-white">
+                  <FilePanel files={files} folder={ws?.path ?? cwd} />
+                  <EditorPane />
+                </div>
+              ),
+            },
+            { key: 'terminal', label: 'ターミナル', content: <Terminal /> },
+          ]}
+        />
+        {overlays}
+      </PlayProvider>
+    )
   }
 
   return (
@@ -94,13 +174,14 @@ export function StageScreen({ onExit }: { onExit: () => void }) {
             <FilePanel files={files} folder={ws?.path ?? cwd} />
             <EditorPane />
           </aside>
-          <main className="grid min-h-0 grid-rows-[minmax(0,1fr)_minmax(150px,42%)]">
+          {/* 列の指定がないと、中身の幅で列が広がって右の列に重なる（プレイテストの P1） */}
+          <main className="grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)_minmax(150px,42%)]">
             <section className="relative min-h-0 overflow-hidden bg-white">
               <h2 className="sr-only">コミットグラフ</h2>
               <CommitGraph view={view} />
               <PushEffect />
             </section>
-            <section className="min-h-0 border-t border-slate-200 bg-slate-50">
+            <section className="min-h-0 overflow-x-auto border-t border-slate-200 bg-slate-50">
               <h2 className="sr-only">4つの領域</h2>
               <FourAreas hasRepo={!!ws?.git} files={files} view={view} remotes={remotes} />
             </section>
@@ -112,10 +193,7 @@ export function StageScreen({ onExit }: { onExit: () => void }) {
         </div>
         <Terminal />
       </div>
-      <CutInOverlay />
-      <ReportModal />
-      <ThunderModal key={`thunder-${session.drama.thunder}`} onRetry={retry} />
-      <ResultPanel onRetry={retry} onExit={onExit} />
+      {overlays}
     </PlayProvider>
   )
 }
